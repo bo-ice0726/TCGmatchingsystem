@@ -2,6 +2,21 @@ let players = [];
 let matches = [];
 let currentRound = 1;
 let winCounts = {};
+let pairHistory = new Set();
+
+function getPairKey(playerA, playerB) {
+  if (!playerA || !playerB) return "";
+  return [playerA, playerB].sort().join("|");
+}
+
+function hasPlayedBefore(playerA, playerB) {
+  return pairHistory.has(getPairKey(playerA, playerB));
+}
+
+function recordPairing(playerA, playerB) {
+  if (!playerA || !playerB) return;
+  pairHistory.add(getPairKey(playerA, playerB));
+}
 
 function addPlayer() {
   const name = document.getElementById("nameInput").value.trim();
@@ -15,6 +30,14 @@ function addPlayer() {
   renderPlayerList();
   renderRanking();
   document.getElementById("nameInput").value = "";
+}
+
+function getSelectedMode() {
+  return document.getElementById("modeSelect").value;
+}
+
+function getModeLabel() {
+  return getSelectedMode() === "swiss" ? "スイスドロー" : "トーナメント";
 }
 
 function renderPlayerList() {
@@ -51,16 +74,28 @@ function createMatches() {
 
   if (matches.length === 0) {
     currentRound = 1;
+    pairHistory.clear();
   }
 
-  const shuffled = shuffle([...players]);
-  matches = [];
+  if (getSelectedMode() === "swiss") {
+    matches = createSwissMatches(players);
+  } else {
+    matches = createTournamentMatches(players);
+  }
+
+  renderRoundInfo();
+  renderMatches();
+}
+
+function createTournamentMatches(playerList) {
+  const shuffled = shuffle([...playerList]);
+  const roundMatches = [];
 
   for (let i = 0; i < shuffled.length; i += 2) {
     const player1 = shuffled[i];
     const player2 = shuffled[i + 1] || null;
 
-    matches.push({
+    roundMatches.push({
       player1,
       player2,
       winner: null,
@@ -69,8 +104,63 @@ function createMatches() {
     });
   }
 
-  renderRoundInfo();
-  renderMatches();
+  return roundMatches;
+}
+
+function createSwissMatches(playerList) {
+  const sorted = [...playerList].sort((a, b) => {
+    const diff = (winCounts[b] || 0) - (winCounts[a] || 0);
+    return diff !== 0 ? diff : a.localeCompare(b);
+  });
+
+  const roundMatches = [];
+  const used = new Set();
+
+  for (let i = 0; i < sorted.length; i += 2) {
+    if (used.has(sorted[i])) continue;
+
+    let player1 = sorted[i];
+    let player2 = null;
+
+    for (let j = i + 1; j < sorted.length; j++) {
+      if (used.has(sorted[j])) continue;
+      if (!hasPlayedBefore(player1, sorted[j])) {
+        player2 = sorted[j];
+        break;
+      }
+    }
+
+    if (!player2) {
+      for (let j = i + 1; j < sorted.length; j++) {
+        if (used.has(sorted[j])) continue;
+        player2 = sorted[j];
+        break;
+      }
+    }
+
+    if (player2) {
+      used.add(player1);
+      used.add(player2);
+      roundMatches.push({
+        player1,
+        player2,
+        winner: null,
+        approved: false,
+        status: "waiting"
+      });
+      recordPairing(player1, player2);
+    } else {
+      roundMatches.push({
+        player1,
+        player2: null,
+        winner: null,
+        approved: false,
+        status: "bye"
+      });
+    }
+  }
+
+  return roundMatches;
 }
 
 function renderMatches() {
@@ -177,25 +267,34 @@ function incrementWinCount(name) {
 }
 
 function nextRound() {
+  const allComplete = matches.length > 0 && matches.every((match) => match.approved);
+  if (!allComplete) return;
+
+  if (getSelectedMode() === "swiss") {
+    currentRound += 1;
+    createMatches();
+    return;
+  }
+
   const winners = matches
     .filter((match) => match.winner)
     .map((match) => match.winner);
 
-  if (winners.length <= 1) {
-    players = winners;
-    renderPlayerList();
-    renderMatches();
-    return;
-  }
-
   players = winners;
-  currentRound += 1;
-  renderPlayerList();
-  createMatches();
+
+  if (players.length > 1) {
+    currentRound += 1;
+    renderPlayerList();
+    createMatches();
+  } else {
+    renderPlayerList();
+    renderRoundInfo();
+    renderMatches();
+  }
 }
 
 function renderRoundInfo() {
   const roundInfo = document.getElementById("roundInfo");
-  roundInfo.textContent = `ラウンド ${currentRound}`;
+  roundInfo.textContent = `方式: ${getModeLabel()} | ラウンド ${currentRound}`;
 }
 
