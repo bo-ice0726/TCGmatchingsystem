@@ -2,40 +2,79 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>マッチングアプリ</title>
+  <title>TCGマッチングシステム</title>
   <style>
-    body { font-family: sans-serif; line-height: 1.6; }
-    button { margin-left: 8px; }
-    .match-item { margin-bottom: 16px; }
-    .status { margin-top: 8px; color: #333; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: #f5f5f5; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 40px; color: #333; }
+    .sections { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+    .section { background: white; border-radius: 8px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .section h2 { margin-bottom: 20px; color: #0066cc; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; font-weight: bold; margin-bottom: 5px; color: #333; }
+    input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    button { width: 100%; padding: 12px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
+    button:hover { background: #0052a3; }
+    .join-link { background: #f9f9f9; padding: 15px; border-radius: 4px; border-left: 4px solid #0066cc; margin-top: 20px; }
+    .join-link p { margin: 5px 0; color: #666; }
+    .join-link input { margin-top: 10px; }
+    .error { color: red; margin-top: 10px; }
+    .success { color: green; margin-top: 10px; }
+    @media (max-width: 768px) {
+      html { font-size: 14px; }
+      h1 { font-size: 1.5rem; margin-bottom: 20px; }
+      .sections { grid-template-columns: 1fr; gap: 20px; padding: 10px; }
+      .section { padding: 20px; }
+      button { font-size: 14px; }
+      input, select { font-size: 16px; padding: 12px; }
+    }
+    @media (max-width: 480px) {
+      .container { padding: 10px; }
+      h1 { font-size: 1.2rem; margin-bottom: 20px; }
+      .section { padding: 15px; }
+      button, input, select { font-size: 14px; padding: 10px; }
+    }
   </style>
 </head>
 <body>
 
-<h1>大会参加</h1>
+<div class="container">
+  <h1>🎮 TCGマッチングシステム</h1>
 
-<input id="nameInput" placeholder="名前">
-<button onclick="addPlayer()">参加</button>
+  <div class="sections">
+    <!-- 開催者セクション -->
+    <div class="section">
+      <h2>📋 大会を開く</h2>
+      <div class="form-group">
+        <label for="tournamentName">大会名</label>
+        <input id="tournamentName" type="text" placeholder="例: 全国大会2026">
+      </div>
+      <div class="form-group">
+        <label for="formatSelect">対戦形式</label>
+        <select id="formatSelect">
+          <option value="">選択してください</option>
+          <option value="tournament">トーナメント形式</option>
+          <option value="swiss">スイスドロー形式</option>
+        </select>
+      </div>
+      <button onclick="createTournament()">大会を開く</button>
+      <div id="createMessage"></div>
+    </div>
 
-<h2>参加者一覧</h2>
-<ul id="playerList"></ul>
+    <!-- 参加者セクション -->
+    <div class="section">
+      <h2>🔗 大会に参加</h2>
+      <div class="join-link">
+        <p>開催者から発行されたリンクを入力してください</p>
+        <input id="participateCode" type="text" placeholder="例: ABCD-1234">
+      </div>
+      <button onclick="participateTournament()" style="margin-top: 20px;">参加する</button>
+      <div id="participateMessage"></div>
+    </div>
+  </div>
+</div>
 
-<h2>ランキング</h2>
-<ul id="rankingList"></ul>
-
-<label for="modeSelect">方式:</label>
-<select id="modeSelect">
-  <option value="tournament">トーナメント</option>
-  <option value="swiss">スイスドロー</option>
-</select>
-
-<button onclick="createMatches()">マッチング開始</button>
-
-<div id="roundInfo" style="margin-top: 16px; font-weight: bold;"></div>
-
-<h2>マッチング結果</h2>
-<div id="matchList"></div>
-
-<script src="script.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

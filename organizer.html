@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>大会開催 - TCGマッチングシステム</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: #f5f5f5; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { color: #0066cc; margin-bottom: 10px; }
+    .tournament-info { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 15px; }
+    .info-item { background: #f0f8ff; padding: 12px; border-radius: 4px; }
+    .info-item label { font-weight: bold; color: #0066cc; }
+    .info-item p { color: #333; margin-top: 5px; }
+    .copy-btn { background: #0066cc; color: white; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; }
+    .copy-btn:hover { background: #0052a3; }
+    .main { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .panel h2 { color: #0066cc; margin-bottom: 15px; border-bottom: 2px solid #0066cc; padding-bottom: 10px; }
+    button { background: #0066cc; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #0052a3; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .status-badge { display: inline-block; padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+    .status-waiting { background: #fff3cd; color: #856404; }
+    .status-started { background: #cce5ff; color: #004085; }
+    .status-finished { background: #d4edda; color: #155724; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 10px; background: #f9f9f9; margin-bottom: 8px; border-radius: 4px; }
+    .participant-item { display: flex; justify-content: space-between; align-items: center; }
+    .matches-list { max-height: 400px; overflow-y: auto; }
+    .match-item { padding: 12px; background: #f9f9f9; margin-bottom: 8px; border-left: 4px solid #0066cc; border-radius: 4px; }
+    .match-header { font-weight: bold; margin-bottom: 8px; }
+    .match-result { color: #666; font-size: 14px; }
+    .action-buttons { margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn-primary { background: #0066cc; }
+    .btn-secondary { background: #6c757d; }
+    .btn-primary:hover { background: #0052a3; }
+    .btn-secondary:hover { background: #5a6268; }
+    .back-btn { background: #6c757d; margin-bottom: 20px; }
+    @media (max-width: 1024px) {
+      .main { grid-template-columns: 1fr; }
+      .tournament-info { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .container { padding: 10px; }
+      .tournament-info { grid-template-columns: 1fr; }
+      .main { grid-template-columns: 1fr; }
+      button, input, select { font-size: 14px; }
+      .matches-list { max-height: 300px; }
+      .action-buttons { flex-direction: column; }
+    }
+    @media (max-width: 480px) {
+      header { padding: 10px; }
+      .panel { padding: 15px; }
+      h1 { font-size: 1.3rem; }
+      .action-buttons button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <button onclick="window.location.href='index.html'" class="back-btn">← ホームに戻る</button>
+
+  <header>
+    <h1 id="tournamentName"></h1>
+    <div class="tournament-info">
+      <div class="info-item">
+        <label>大会コード</label>
+        <p id="codeDisplay"></p>
+      </div>
+      <div class="info-item">
+        <label>対戦形式</label>
+        <p id="formatDisplay"></p>
+      </div>
+      <div class="info-item">
+        <label>ステータス</label>
+        <p id="statusDisplay"></p>
+      </div>
+      <div class="info-item">
+        <label>参加者数</label>
+        <p id="participantCountDisplay"></p>
+      </div>
+    </div>
+  </header>
+
+  <div class="main">
+    <!-- 参加者管理 -->
+    <div class="panel">
+      <h2>👥 参加者一覧</h2>
+      <ul id="participantsList"></ul>
+      <div class="action-buttons">
+        <button onclick="startTournament()" id="startBtn" class="btn-primary">大会開始</button>
+      </div>
+    </div>
+
+    <!-- マッチング情報 -->
+    <div class="panel">
+      <h2>🎮 ラウンド情報</h2>
+      <div id="roundInfo"></div>
+      <div class="matches-list" id="matchesList"></div>
+      <div class="action-buttons">
+        <button onclick="nextRound()" id="nextRoundBtn" class="btn-primary" style="display:none;">次のラウンドへ</button>
+        <button onclick="finishTournament()" id="finishBtn" class="btn-primary" style="display:none;">大会を終了</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script src="organizer.js"></script>
+</body>
+</html>
