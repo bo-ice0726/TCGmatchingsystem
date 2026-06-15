@@ -2,7 +2,10 @@ let players = [];
 let matches = [];
 let currentRound = 1;
 let winCounts = {};
+let lossCounts = {};
 let pairHistory = new Set();
+let tournamentEnded = false;
+let tournamentWinner = null;
 
 function getPairKey(playerA, playerB) {
   if (!playerA || !playerB) return "";
@@ -24,6 +27,9 @@ function addPlayer() {
 
   if (!winCounts[name]) {
     winCounts[name] = 0;
+  }
+  if (!lossCounts[name]) {
+    lossCounts[name] = 0;
   }
 
   players.push(name);
@@ -75,6 +81,8 @@ function createMatches() {
   if (matches.length === 0) {
     currentRound = 1;
     pairHistory.clear();
+    tournamentEnded = false;
+    tournamentWinner = null;
   }
 
   if (getSelectedMode() === "swiss") {
@@ -218,14 +226,19 @@ function renderMatches() {
   const control = document.createElement("div");
   control.style.marginTop = "16px";
 
-  if (allComplete && matches.length > 1) {
+  if (allComplete && matches.length > 1 && !tournamentEnded) {
     const nextButton = document.createElement("button");
     nextButton.textContent = "次のラウンドへ進む";
     nextButton.onclick = nextRound;
     control.appendChild(nextButton);
   }
 
-  if (matches.length === 1 && allComplete) {
+  if (tournamentEnded && tournamentWinner) {
+    const finalText = document.createElement("div");
+    finalText.textContent = `大会終了: ${tournamentWinner} が優勝です。`;
+    finalText.style.marginTop = "10px";
+    control.appendChild(finalText);
+  } else if (matches.length === 1 && allComplete) {
     const finalText = document.createElement("div");
     finalText.textContent = `大会終了: ${matches[0].winner} が優勝です。`;
     finalText.style.marginTop = "10px";
@@ -253,6 +266,8 @@ function approveResult(matchIndex) {
   match.status = "approved";
   if (!match.counted) {
     incrementWinCount(match.winner);
+    const loser = match.winner === match.player1 ? match.player2 : match.player1;
+    incrementLossCount(loser);
     match.counted = true;
   }
   renderMatches();
@@ -266,11 +281,31 @@ function incrementWinCount(name) {
   renderRanking();
 }
 
+function incrementLossCount(name) {
+  if (!lossCounts[name]) {
+    lossCounts[name] = 0;
+  }
+  lossCounts[name] += 1;
+}
+
+function getSwissUndefeatedWinner() {
+  const undefeated = players.filter((name) => (lossCounts[name] || 0) === 0);
+  return undefeated.length === 1 ? undefeated[0] : null;
+}
+
 function nextRound() {
   const allComplete = matches.length > 0 && matches.every((match) => match.approved);
   if (!allComplete) return;
 
   if (getSelectedMode() === "swiss") {
+    const winner = getSwissUndefeatedWinner();
+    if (winner && players.length > 1) {
+      tournamentEnded = true;
+      tournamentWinner = winner;
+      renderMatches();
+      return;
+    }
+
     currentRound += 1;
     createMatches();
     return;
