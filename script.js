@@ -1,5 +1,6 @@
 let players = [];
 let matches = [];
+let currentRound = 1;
 
 function addPlayer() {
   const name = document.getElementById("nameInput").value.trim();
@@ -28,6 +29,10 @@ function shuffle(array) {
 function createMatches() {
   if (players.length === 0) return;
 
+  if (matches.length === 0) {
+    currentRound = 1;
+  }
+
   const shuffled = shuffle([...players]);
   matches = [];
 
@@ -44,6 +49,7 @@ function createMatches() {
     });
   }
 
+  renderRoundInfo();
   renderMatches();
 }
 
@@ -93,6 +99,26 @@ function renderMatches() {
     container.appendChild(actions);
     matchList.appendChild(container);
   });
+
+  const allComplete = matches.length > 0 && matches.every((match) => match.approved);
+  const control = document.createElement("div");
+  control.style.marginTop = "16px";
+
+  if (allComplete && matches.length > 1) {
+    const nextButton = document.createElement("button");
+    nextButton.textContent = "次のラウンドへ進む";
+    nextButton.onclick = nextRound;
+    control.appendChild(nextButton);
+  }
+
+  if (matches.length === 1 && allComplete) {
+    const finalText = document.createElement("div");
+    finalText.textContent = `大会終了: ${matches[0].winner} が優勝です。`;
+    finalText.style.marginTop = "10px";
+    control.appendChild(finalText);
+  }
+
+  matchList.appendChild(control);
 }
 
 function registerWinner(matchIndex, winnerName) {
@@ -112,5 +138,28 @@ function approveResult(matchIndex) {
   match.approved = true;
   match.status = "approved";
   renderMatches();
+}
+
+function nextRound() {
+  const winners = matches
+    .filter((match) => match.winner)
+    .map((match) => match.winner);
+
+  if (winners.length <= 1) {
+    players = winners;
+    renderPlayerList();
+    renderMatches();
+    return;
+  }
+
+  players = winners;
+  currentRound += 1;
+  renderPlayerList();
+  createMatches();
+}
+
+function renderRoundInfo() {
+  const roundInfo = document.getElementById("roundInfo");
+  roundInfo.textContent = `ラウンド ${currentRound}`;
 }
 
