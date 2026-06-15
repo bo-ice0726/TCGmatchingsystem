@@ -1,13 +1,19 @@
 let players = [];
 let matches = [];
 let currentRound = 1;
+let winCounts = {};
 
 function addPlayer() {
   const name = document.getElementById("nameInput").value.trim();
   if (!name) return;
 
+  if (!winCounts[name]) {
+    winCounts[name] = 0;
+  }
+
   players.push(name);
   renderPlayerList();
+  renderRanking();
   document.getElementById("nameInput").value = "";
 }
 
@@ -19,6 +25,20 @@ function renderPlayerList() {
     const li = document.createElement("li");
     li.textContent = name;
     list.appendChild(li);
+  });
+}
+
+function renderRanking() {
+  const ranking = document.getElementById("rankingList");
+  ranking.innerHTML = "";
+
+  const sorted = Object.entries(winCounts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+  sorted.forEach(([name, wins]) => {
+    const li = document.createElement("li");
+    li.textContent = `${name}: ${wins}勝`;
+    ranking.appendChild(li);
   });
 }
 
@@ -72,6 +92,10 @@ function renderMatches() {
       match.winner = match.player1;
       match.approved = true;
       match.status = "bye";
+      if (!match.counted) {
+        incrementWinCount(match.player1);
+        match.counted = true;
+      }
       actions.textContent = `不戦勝: ${match.player1} は自動的に勝者です。`;
     } else if (!match.winner) {
       const button1 = document.createElement("button");
@@ -137,7 +161,19 @@ function approveResult(matchIndex) {
 
   match.approved = true;
   match.status = "approved";
+  if (!match.counted) {
+    incrementWinCount(match.winner);
+    match.counted = true;
+  }
   renderMatches();
+}
+
+function incrementWinCount(name) {
+  if (!winCounts[name]) {
+    winCounts[name] = 0;
+  }
+  winCounts[name] += 1;
+  renderRanking();
 }
 
 function nextRound() {
