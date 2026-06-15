@@ -1,7 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <title>マッチングアプリ</title>
+  <style>
+    body { font-family: sans-serif; line-height: 1.6; }
+    button { margin-left: 8px; }
+    .match-item { margin-bottom: 16px; }
+    .status { margin-top: 8px; color: #333; }
+  </style>
 </head>
 <body>
 
@@ -16,9 +23,8 @@
 <button onclick="createMatches()">マッチング開始</button>
 
 <h2>マッチング結果</h2>
-<ul id="matchList"></ul>
+<div id="matchList"></div>
 
-script.js>
-
+<script src="script.js"></script>
 </body>
 </html>
