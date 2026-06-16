@@ -1,35 +1,30 @@
 // 参加者画面ロジック
 let currentTournament = null;
 let currentPlayer = null;
+let updateInterval = null;
 
 function getCodeFromURL() {
   const params = new URLSearchParams(window.location.search);
   return params.get('code');
 }
 
-function loadTournament() {
+async function loadTournament() {
   const code = getCodeFromURL();
   if (!code) {
     window.location.href = 'index.html';
     return;
   }
 
-  currentTournament = manager.getTournament(code);
-  if (!currentTournament) {
+  try {
+    currentTournament = await manager.getTournament(code);
+  } catch (error) {
     alert('大会が見つかりません');
     window.location.href = 'index.html';
     return;
   }
-
-  // ローカルストレージから参加者情報取得
-  const playerName = storage.getItem(`participant_${code}`);
-  if (playerName) {
-    currentPlayer = playerName;
-    showParticipateView();
-  }
 }
 
-function joinTournament() {
+async function joinTournament() {
   const name = document.getElementById('playerName').value.trim();
 
   if (!name) {
@@ -37,18 +32,18 @@ function joinTournament() {
     return;
   }
 
-  if (!manager.joinTournament(currentTournament.id, name)) {
-    showJoinMessage('エラー: この名前は既に登録されています', 'error');
-    return;
+  try {
+    const result = await manager.joinTournament(currentTournament.id, name);
+    currentPlayer = name;
+    currentTournament = result.tournament;
+
+    showJoinMessage('参加しました！', 'success');
+    setTimeout(() => {
+      showParticipateView();
+    }, 500);
+  } catch (error) {
+    showJoinMessage('エラー: ' + error.message, 'error');
   }
-
-  currentPlayer = name;
-  storage.setItem(`participant_${currentTournament.id}`, name);
-
-  showJoinMessage('参加しました！', 'success');
-  setTimeout(() => {
-    showParticipateView();
-  }, 500);
 }
 
 function showJoinMessage(text, type) {
@@ -69,6 +64,42 @@ function showParticipateView() {
   renderMatching();
   startAutoUpdate();
 }
+
+function startAutoUpdate() {
+  if (updateInterval) {
+    clearInterval(updateInterval);
+  }
+  
+  updateInterval = setInterval(async () => {
+    try {
+      const code = getCodeFromURL();
+      if (code) {
+        currentTournament = await manager.getTournament(code);
+        renderStatus();
+        renderMatching();
+      }
+    } catch (error) {
+      console.error('Failed to update tournament:', error);
+    }
+  }, 2000);
+}
+
+function stopAutoUpdate() {
+  if (updateInterval) {
+    clearInterval(updateInterval);
+    updateInterval = null;
+  }
+}
+
+window.addEventListener('beforeunload', stopAutoUpdate);
+window.addEventListener('pagehide', stopAutoUpdate);
+
+window.addEventListener('pageshow', () => {
+  if (currentPlayer) {
+    startAutoUpdate();
+  }
+});
+
 
 function renderStatus() {
   const statusMap = { waiting: '参加受付中', started: '試合進行中', finished: '終了' };
@@ -141,10 +172,16 @@ function registerWin(matchId) {
   if (!match) return;
 
   match.winner = currentPlayer;
-  manager.updateTournament(currentTournament.id, { matches: currentTournament.matches });
-  currentTournament = manager.getTournament(currentTournament.id);
 
-  renderMatching();
+  (async () => {
+    try {
+      await manager.updateTournament(currentTournament.id, { matches: currentTournament.matches });
+      currentTournament = await manager.getTournament(currentTournament.id);
+      renderMatching();
+    } catch (error) {
+      alert('失敗しました: ' + error.message);
+    }
+  })();
 }
 
 function registerLoss(matchId) {
@@ -153,10 +190,16 @@ function registerLoss(matchId) {
 
   const opponent = match.player1 === currentPlayer ? match.player2 : match.player1;
   match.winner = opponent;
-  manager.updateTournament(currentTournament.id, { matches: currentTournament.matches });
-  currentTournament = manager.getTournament(currentTournament.id);
 
-  renderMatching();
+  (async () => {
+    try {
+      await manager.updateTournament(currentTournament.id, { matches: currentTournament.matches });
+      currentTournament = await manager.getTournament(currentTournament.id);
+      renderMatching();
+    } catch (error) {
+      alert('失敗しました: ' + error.message);
+    }
+  })();
 }
 
 function approveResult(matchId) {
@@ -176,55 +219,21 @@ function approveResult(matchId) {
   }
   currentTournament.lossCounts[loser]++;
 
-  manager.updateTournament(currentTournament.id, {
-    matches: currentTournament.matches,
-    winCounts: currentTournament.winCounts,
-    lossCounts: currentTournament.lossCounts
-  });
-
-  currentTournament = manager.getTournament(currentTournament.id);
-  renderStatus();
-  renderMatching();
-}
-
-// グローバル変数でインターバルIDを保存
-let updateInterval = null;
-
-function startAutoUpdate() {
-  if (updateInterval) {
-    clearInterval(updateInterval);
-  }
-  
-  updateInterval = setInterval(() => {
-    if (currentTournament) {
-      const updated = manager.getTournament(currentTournament.id);
-      if (updated) {
-        currentTournament = updated;
-        renderStatus();
-        renderMatching();
-      }
+  (async () => {
+    try {
+      await manager.updateTournament(currentTournament.id, {
+        matches: currentTournament.matches,
+        winCounts: currentTournament.winCounts,
+        lossCounts: currentTournament.lossCounts
+      });
+      currentTournament = await manager.getTournament(currentTournament.id);
+      renderStatus();
+      renderMatching();
+    } catch (error) {
+      alert('失敗しました: ' + error.message);
     }
-  }, 2000);
+  })();
 }
-
-function stopAutoUpdate() {
-  if (updateInterval) {
-    clearInterval(updateInterval);
-    updateInterval = null;
-  }
-}
-
-// ページから離れる時にインターバル停止
-window.addEventListener('beforeunload', stopAutoUpdate);
-window.addEventListener('pagehide', stopAutoUpdate);
-
-// ページ表示時にインターバル開始
-window.addEventListener('pageshow', () => {
-  if (currentPlayer) {
-    startAutoUpdate();
-  }
-});
-
 
 // ページロード
 if (document.readyState === 'loading') {
@@ -232,4 +241,5 @@ if (document.readyState === 'loading') {
 } else {
   loadTournament();
 }
+
 

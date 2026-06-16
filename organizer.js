@@ -1,29 +1,60 @@
 // 開催者画面ロジック
 let currentTournament = null;
+let updateInterval = null;
 
 function getCodeFromURL() {
   const params = new URLSearchParams(window.location.search);
   return params.get('code');
 }
 
-function loadTournament() {
+async function loadTournament() {
   const code = getCodeFromURL();
   if (!code) {
     window.location.href = 'index.html';
     return;
   }
 
-  currentTournament = manager.getTournament(code);
-  if (!currentTournament) {
+  try {
+    currentTournament = await manager.getTournament(code);
+    renderTournamentInfo();
+    renderParticipants();
+    renderMatches();
+    startAutoUpdate();
+  } catch (error) {
     alert('大会が見つかりません');
     window.location.href = 'index.html';
-    return;
+  }
+}
+
+function startAutoUpdate() {
+  if (updateInterval) {
+    clearInterval(updateInterval);
   }
 
-  renderTournamentInfo();
-  renderParticipants();
-  renderMatches();
+  updateInterval = setInterval(async () => {
+    try {
+      const code = getCodeFromURL();
+      if (code) {
+        currentTournament = await manager.getTournament(code);
+        renderTournamentInfo();
+        renderParticipants();
+        renderMatches();
+      }
+    } catch (error) {
+      console.error('Failed to update tournament:', error);
+    }
+  }, 2000);
 }
+
+function stopAutoUpdate() {
+  if (updateInterval) {
+    clearInterval(updateInterval);
+    updateInterval = null;
+  }
+}
+
+window.addEventListener('beforeunload', stopAutoUpdate);
+window.addEventListener('pagehide', stopAutoUpdate);
 
 function renderTournamentInfo() {
   document.getElementById('tournamentName').textContent = currentTournament.name;
@@ -110,13 +141,19 @@ function startTournament() {
     return;
   }
 
-  manager.startTournament(currentTournament.id);
-  currentTournament = manager.getTournament(currentTournament.id);
+  (async () => {
+    try {
+      await manager.startTournament(currentTournament.id);
+      currentTournament = await manager.getTournament(currentTournament.id);
 
-  // 初期マッチング生成
-  generateMatches();
-  renderTournamentInfo();
-  renderMatches();
+      // 初期マッチング生成
+      generateMatches();
+      renderTournamentInfo();
+      renderMatches();
+    } catch (error) {
+      alert('大会を開始できません: ' + error.message);
+    }
+  })();
 }
 
 function generateMatches() {
@@ -151,19 +188,17 @@ function generateMatches() {
   }
 
   currentTournament.matches = [...currentTournament.matches, ...newMatches];
-  manager.updateTournament(currentTournament.id, { 
-    matches: currentTournament.matches,
-    winCounts: currentTournament.winCounts
-  });
-}
 
-function recordPairing(player1, player2) {
-  const pair = [player1, player2].sort().join('|');
-  currentTournament.pairHistory.push(pair);
-}
-
-function shuffle(array) {
-  return array.sort(() => Math.random() - 0.5);
+  (async () => {
+    try {
+      await manager.updateTournament(currentTournament.id, {
+        matches: currentTournament.matches,
+        winCounts: currentTournament.winCounts
+      });
+    } catch (error) {
+      console.error('Failed to update matches:', error);
+    }
+  })();
 }
 
 function nextRound() {
@@ -177,16 +212,29 @@ function nextRound() {
 
   currentTournament.currentRound += 1;
   generateMatches();
-  manager.updateTournament(currentTournament.id, { currentRound: currentTournament.currentRound });
+
+  (async () => {
+    try {
+      await manager.updateTournament(currentTournament.id, {
+        currentRound: currentTournament.currentRound
+      });
+    } catch (error) {
+      console.error('Failed to update round:', error);
+    }
+  })();
 
   renderTournamentInfo();
   renderMatches();
 }
 
-function finishTournament() {
-  currentTournament.status = 'finished';
-  manager.updateTournament(currentTournament.id, { status: 'finished' });
-  renderTournamentInfo();
+async function finishTournament() {
+  try {
+    await manager.updateTournament(currentTournament.id, { status: 'finished' });
+    currentTournament = await manager.getTournament(currentTournament.id);
+    renderTournamentInfo();
+  } catch (error) {
+    alert('大会を終了できません: ' + error.message);
+  }
 }
 
 // ページロード
@@ -195,4 +243,5 @@ if (document.readyState === 'loading') {
 } else {
   loadTournament();
 }
+
 

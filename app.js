@@ -1,13 +1,14 @@
+// API ベースURL
+const API_BASE = 'http://localhost:3000/api';
+
 // ブラウザ互換性チェック
 function checkBrowserCompatibility() {
   const errors = [];
   
-  // LocalStorage チェック
-  if (!window.localStorage) {
-    errors.push('LocalStorage');
+  if (!window.fetch) {
+    errors.push('Fetch API');
   }
   
-  // JSON チェック
   if (!window.JSON) {
     errors.push('JSON');
   }
@@ -19,123 +20,61 @@ function checkBrowserCompatibility() {
 
 checkBrowserCompatibility();
 
-// LocalStorage フォールバック
-const storage = (() => {
+// API ヘルパー関数
+async function apiCall(method, endpoint, data = null) {
+  const options = {
+    method,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  };
+
+  if (data) {
+    options.body = JSON.stringify(data);
+  }
+
   try {
-    localStorage.setItem('test', 'test');
-    localStorage.removeItem('test');
-    return localStorage;
-  } catch (e) {
-    // メモリフォールバック
-    let data = {};
-    return {
-      getItem: (key) => data[key] || null,
-      setItem: (key, value) => { data[key] = value; },
-      removeItem: (key) => { delete data[key]; },
-      clear: () => { data = {}; }
-    };
-  }
-})();
+    const response = await fetch(`${API_BASE}${endpoint}`, options);
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'API エラー');
+    }
 
-// 大会データ管理
+    return await response.json();
+  } catch (error) {
+    console.error('API call failed:', error);
+    throw error;
+  }
+}
+
+// 大会データ管理（API版）
 class TournamentManager {
-  constructor() {
-    this.tournaments = this.loadFromStorage();
+  async createTournament(name, format) {
+    return await apiCall('POST', '/tournaments', { name, format });
   }
 
-  loadFromStorage() {
-    try {
-      const data = storage.getItem('tournaments');
-      return data ? JSON.parse(data) : {};
-    } catch (e) {
-      console.error('Failed to load tournaments:', e);
-      return {};
-    }
+  async getTournament(code) {
+    return await apiCall('GET', `/tournaments/${code}`);
   }
 
-  saveToStorage() {
-    try {
-      storage.setItem('tournaments', JSON.stringify(this.tournaments));
-    } catch (e) {
-      console.error('Failed to save tournaments:', e);
-    }
+  async joinTournament(code, playerName) {
+    return await apiCall('POST', `/tournaments/${code}/join`, { playerName });
   }
 
-  generateCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 4; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    code += '-';
-    for (let i = 0; i < 4; i++) {
-      code += Math.floor(Math.random() * 10);
-    }
-    return code;
+  async startTournament(code) {
+    return await apiCall('POST', `/tournaments/${code}/start`);
   }
 
-  createTournament(name, format) {
-    const code = this.generateCode();
-    this.tournaments[code] = {
-      id: code,
-      name: name,
-      format: format,
-      createdAt: new Date().toISOString(),
-      status: 'waiting', // waiting, started, finished
-      participants: {},
-      matches: [],
-      currentRound: 0,
-      winCounts: {},
-      lossCounts: {},
-      pairHistory: []
-    };
-    this.saveToStorage();
-    return code;
-  }
-
-  getTournament(code) {
-    return this.tournaments[code] || null;
-  }
-
-  joinTournament(code, playerName) {
-    const tournament = this.tournaments[code];
-    if (!tournament) return false;
-    if (tournament.participants[playerName]) return false; // すでに参加している
-
-    tournament.participants[playerName] = {
-      name: playerName,
-      joinedAt: new Date().toISOString()
-    };
-    tournament.winCounts[playerName] = 0;
-    tournament.lossCounts[playerName] = 0;
-    this.saveToStorage();
-    return true;
-  }
-
-  startTournament(code) {
-    const tournament = this.tournaments[code];
-    if (!tournament) return false;
-
-    tournament.status = 'started';
-    tournament.currentRound = 1;
-    this.saveToStorage();
-    return true;
-  }
-
-  updateTournament(code, updates) {
-    const tournament = this.tournaments[code];
-    if (!tournament) return false;
-
-    Object.assign(tournament, updates);
-    this.saveToStorage();
-    return true;
+  async updateTournament(code, updates) {
+    return await apiCall('PUT', `/tournaments/${code}`, updates);
   }
 }
 
 const manager = new TournamentManager();
 
 // ホーム画面処理
-function createTournament() {
+async function createTournament() {
   const name = document.getElementById('tournamentName').value.trim();
   const format = document.getElementById('formatSelect').value;
 
@@ -144,16 +83,21 @@ function createTournament() {
     return;
   }
 
-  const code = manager.createTournament(name, format);
-  const message = `
-    <p class="success">大会が作成されました！</p>
-    <p>大会コード: <strong>${code}</strong></p>
-    <p><button onclick="goToOrganizer('${code}')" style="width: 100%; padding: 10px; margin-top: 10px;">開催者画面へ</button></p>
-  `;
-  document.getElementById('createMessage').innerHTML = message;
+  try {
+    const result = await manager.createTournament(name, format);
+    const code = result.code;
+    const message = `
+      <p class="success">大会が作成されました！</p>
+      <p>大会コード: <strong>${code}</strong></p>
+      <p><button onclick="goToOrganizer('${code}')" style="width: 100%; padding: 10px; margin-top: 10px;">開催者画面へ</button></p>
+    `;
+    document.getElementById('createMessage').innerHTML = message;
+  } catch (error) {
+    showMessage('createMessage', `エラー: ${error.message}`, 'error');
+  }
 }
 
-function participateTournament() {
+async function participateTournament() {
   const code = document.getElementById('participateCode').value.trim().toUpperCase();
 
   if (!code) {
@@ -161,13 +105,12 @@ function participateTournament() {
     return;
   }
 
-  if (!manager.getTournament(code)) {
+  try {
+    await manager.getTournament(code);
+    window.location.href = `participant.html?code=${code}`;
+  } catch (error) {
     showMessage('participateMessage', 'エラー: 大会が見つかりません', 'error');
-    return;
   }
-
-  // 参加ページへ遷移
-  window.location.href = `participant.html?code=${code}`;
 }
 
 function goToOrganizer(code) {
@@ -195,3 +138,4 @@ if (document.readyState === 'loading') {
 } else {
   initHomePage();
 }
+

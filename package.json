@@ -1,0 +1,26 @@
+{
+  "name": "tcg-matching-system",
+  "version": "1.0.0",
+  "description": "TCGマッチングシステム - マルチデバイス対応大会管理アプリ",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "tcg",
+    "matching",
+    "tournament",
+    "swiss-draw"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=12.0.0"
+  }
+}
