@@ -229,17 +229,35 @@ function nextRound() {
     return;
   }
 
+  // 👇追加：全勝者チェック
+  const undefeated = Object.keys(currentTournament.participants).filter(p => {
+    return (currentTournament.lossCounts[p] || 0) === 0;
+  });
+
+  if (undefeated.length === 1 && Object.keys(currentTournament.participants).length > 1) {
+    // 終了処理
+    alert(`大会終了！優勝者: ${undefeated[0]}`);
+
+    currentTournament.status = 'finished';
+
+    (async () => {
+      await manager.updateTournament(currentTournament.id, {
+        status: 'finished'
+      });
+    })();
+
+    renderTournamentInfo();
+    return;
+  }
+
+  // 通常の次ラウンド
   currentTournament.currentRound += 1;
   generateMatches();
 
   (async () => {
-    try {
-      await manager.updateTournament(currentTournament.id, {
-        currentRound: currentTournament.currentRound
-      });
-    } catch (error) {
-      console.error('Failed to update round:', error);
-    }
+    await manager.updateTournament(currentTournament.id, {
+      currentRound: currentTournament.currentRound
+    });
   })();
 
   renderTournamentInfo();
