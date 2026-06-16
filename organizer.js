@@ -229,7 +229,7 @@ function nextRound() {
     return;
   }
 
-  // 👇追加：全勝者チェック
+  // 追加：全勝者チェック
   const undefeated = Object.keys(currentTournament.participants).filter(p => {
     return (currentTournament.lossCounts[p] || 0) === 0;
   });

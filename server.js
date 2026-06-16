@@ -1,3 +1,5 @@
+const BACKUP_FILE = path.join(__dirname, 'backup.json');
+
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs').promises;
@@ -108,6 +110,40 @@ class TournamentManager {
 
     return true;
   }
+
+  async backupTournament(code) {
+    if (!this.tournaments[code]) return;
+
+    let backupData = [];
+
+    try {
+      const data = await fs.readFile(BACKUP_FILE, 'utf-8');
+      backupData = JSON.parse(data);
+    } catch (e) {
+      backupData = [];
+    }
+
+    backupData.push(this.tournaments[code]);
+
+    await fs.writeFile(BACKUP_FILE, JSON.stringify(backupData, null, 2), 'utf-8');
+  }
+
+  async cleanupOldTournaments() {
+    const now = new Date();
+
+    for (const code of Object.keys(this.tournaments)) {
+      const tournament = this.tournaments[code];
+      const created = new Date(tournament.createdAt);
+      const diffHours = (now - created) / (1000 * 60 * 60);
+
+      // 24時間以上経過した大会データを自動削除
+      if (diffHours > 24) {
+        await this.backupTournament(code);
+        delete this.tournaments[code];
+      }
+    }
+  }
+
 }
 
 const manager = new TournamentManager();
@@ -161,6 +197,7 @@ app.post('/api/tournaments/:code/join', async (req, res) => {
     return res.status(400).json({ error: 'この名前は既に登録されています' });
   }
 
+  await manager.cleanupOldTournaments();
   await manager.save();
 
   res.json({ success: true, tournament: manager.getTournament(code) });
@@ -179,6 +216,7 @@ app.post('/api/tournaments/:code/start', async (req, res) => {
     return res.status(400).json({ error: '大会を開始できません' });
   }
 
+  await manager.cleanupOldTournaments();
   await manager.save();
 
   res.json({ success: true, tournament: manager.getTournament(code) });
@@ -198,6 +236,7 @@ app.put('/api/tournaments/:code', async (req, res) => {
     return res.status(400).json({ error: '大会を更新できません' });
   }
 
+  await manager.cleanupOldTournaments();
   await manager.save();
 
   res.json({ success: true, tournament: manager.getTournament(code) });
@@ -206,6 +245,18 @@ app.put('/api/tournaments/:code', async (req, res) => {
 // サーバー起動
 async function startServer() {
   await manager.load();
+  await manager.cleanupOldTournaments();
+  await manager.save();
+
+  // 定期削除: 1時間ごとに古い大会をクリーンアップ
+  setInterval(async () => {
+    try {
+      await manager.cleanupOldTournaments();
+      await manager.save();
+    } catch (e) {
+      console.error('cleanupOldTournaments failed:', e);
+    }
+  }, 1000 * 60 * 60);
 
   app.listen(PORT, () => {
     console.log(`TCGマッチングシステム サーバー起動: http://localhost:${PORT}`);
