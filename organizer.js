@@ -3,6 +3,21 @@ function shuffle(array) {
   return array.sort(() => Math.random() - 0.5);
 }
 
+function recordPairing(player1, player2) {
+  if (!player1 || !player2) return;
+
+  // ペア履歴がなければ初期化
+  if (!currentTournament.pairHistory) {
+    currentTournament.pairHistory = [];
+  }
+
+  const key = [player1, player2].sort().join('|');
+
+  if (!currentTournament.pairHistory.includes(key)) {
+    currentTournament.pairHistory.push(key);
+  }
+}
+
 let currentTournament = null;
 let updateInterval = null;
 
