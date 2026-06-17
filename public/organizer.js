@@ -389,6 +389,54 @@ function generateMatches() {
   })();
 }
 
+/**
+ * トーナメント形式用：勝者リストを取得
+ */
+function getWinners(matches) {
+  return matches.map(m => m.winner).filter(w => w);
+}
+
+/**
+ * トーナメント形式用：勝者からマッチを生成
+ */
+function generateTournamentMatches(players, round) {
+  const matches = [];
+  let matchNumber = 1;
+
+  for (let i = 0; i < players.length; i += 2) {
+    const player1 = players[i];
+    const player2 = players[i + 1];
+
+    if (!player2) {
+      // 奇数の場合は不戦勝
+      matches.push({
+        id: `${round}-${matchNumber}`,
+        round,
+        number: matchNumber,
+        player1,
+        player2: null,
+        winner: player1,
+        approved: true
+      });
+      currentTournament.winCounts[player1]++;
+    } else {
+      matches.push({
+        id: `${round}-${matchNumber}`,
+        round,
+        number: matchNumber,
+        player1,
+        player2,
+        winner: null,
+        approved: false
+      });
+    }
+
+    matchNumber++;
+  }
+
+  return matches;
+}
+
 function nextRound() {
   const currentMatches = currentTournament.matches.filter(m => m.round === currentTournament.currentRound);
   const allApproved = currentMatches.every(m => m.approved);
@@ -398,6 +446,46 @@ function nextRound() {
     return;
   }
 
+  // トーナメント形式の場合：勝者のみを次ラウンドに進める
+  if (currentTournament.format === 'tournament') {
+    const winners = getWinners(currentMatches);
+
+    if (winners.length === 1) {
+      alert(`大会終了！優勝者: ${winners[0]}`);
+      currentTournament.status = 'finished';
+
+      (async () => {
+        await manager.updateTournament(currentTournament.id, {
+          status: 'finished'
+        });
+      })();
+
+      renderTournamentInfo();
+      return;
+    }
+
+    currentTournament.currentRound += 1;
+    const newMatches = generateTournamentMatches(winners, currentTournament.currentRound);
+    currentTournament.matches.push(...newMatches);
+
+    (async () => {
+      try {
+        await manager.updateTournament(currentTournament.id, {
+          matches: currentTournament.matches,
+          winCounts: currentTournament.winCounts,
+          currentRound: currentTournament.currentRound
+        });
+      } catch (error) {
+        console.error('Failed to update tournament:', error);
+      }
+    })();
+
+    renderTournamentInfo();
+    renderMatches();
+    return;
+  }
+
+  // スイスドロー形式の場合：全参加者で再マッチング（既存ロジック）
   // 追加：全勝者チェック
   const undefeated = Object.keys(currentTournament.participants).filter(p => {
     return (currentTournament.lossCounts[p] || 0) === 0;
