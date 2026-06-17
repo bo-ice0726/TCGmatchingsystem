@@ -31,7 +31,12 @@ class TournamentManager {
 
   async save() {
     try {
-      await fs.writeFile(DATA_FILE, JSON.stringify(this.tournaments, null, 2), 'utf-8');
+      await this.cleanupOldTournaments();
+      await fs.writeFile(
+        DATA_FILE,
+        JSON.stringify(this.tournaments, null, 2), 
+        'utf-8'
+      );
     } catch (e) {
       console.error('Failed to save tournaments:', e);
     }
