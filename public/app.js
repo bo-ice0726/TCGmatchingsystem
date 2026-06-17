@@ -1,5 +1,5 @@
-// API ベースURL
-const API_BASE = 'http://localhost:3000/api';
+// API ベースURL（Render のバックエンド URL をここで変更できます）
+const API_URL = 'https://example.onrender.com/api';
 
 // ブラウザ互換性チェック
 function checkBrowserCompatibility() {
@@ -34,7 +34,7 @@ async function apiCall(method, endpoint, data = null) {
   }
 
   try {
-    const response = await fetch(`${API_BASE}${endpoint}`, options);
+    const response = await fetch(`${API_URL}${endpoint}`, options);
     
     if (!response.ok) {
       const error = await response.json();

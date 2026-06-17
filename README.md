@@ -143,6 +143,49 @@ TCGmatchingsystem/
 PORT=8080 npm start
 ```
 
+## 公開方法
+
+このアプリは、フロントエンドを Vercel、バックエンドを Render で公開する構成を想定しています。
+
+### フロントエンド
+
+- `public/` フォルダ内の `index.html` / `organizer.html` / `participant.html` / `app.js` などを Vercel にデプロイします。
+- フロントエンドは Vercel のホスト上で動作し、RenderのAPIを呼び出します。
+
+### バックエンド
+
+- `server.js` を Render で動かします。
+- `server.js` は `public/` フォルダを静的配信し、APIルートを提供します。
+
+### APIのURL設定
+
+フロントエンドの `public/app.js` で `API_URL` を更新してください。
+
+```js
+const API_URL = 'https://your-app.onrender.com/api';
+```
+
+### Renderでの基本設定
+
+- ビルドコマンド: `npm install`
+- 起動コマンド: `npm start`
+- ポート: 自動で `PORT` 環境変数が割り当てられます
+
+### Vercelでの基本設定
+
+- GitHubリポジトリをVercelに接続
+- `public/` を静的サイトとして公開
+- `public/app.js` の `API_URL` を Render の URL に変更
+
+### 例
+
+- Renderバックエンド: `https://your-app.onrender.com`
+- Vercelフロントエンド: `https://your-app.vercel.app`
+
+## もっと簡単に公開するなら
+
+RenderやRailwayなら、GitHubリポジトリを接続して自動デプロイを有効にするだけで公開できます。
+
 ## ライセンス
 
 MIT

@@ -12,7 +12,8 @@ const DATA_FILE = path.join(__dirname, 'tournaments.json');
 // ミドルウェア
 app.use(cors());
 app.use(express.json());
-app.use(express.static('.'));
+// フロントファイルは public フォルダに配置して配信する
+app.use(express.static('public'));
 
 // データ管理
 class TournamentManager {
@@ -155,7 +156,7 @@ const manager = new TournamentManager();
 
 // ルート
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // API: 大会作成
