@@ -2,6 +2,24 @@
 
 複数デバイス・ブラウザ対応の大会管理アプリケーションです。
 
+フロント（Vercel）とバックエンド（Render）で分離公開できる構成になっています。
+
+## 構成
+
+```
+project/
+├── server.js          # Node.js Express バックエンド
+├── tournaments.json   # 大会データ
+├── public/            # フロントエンドファイル
+│   ├── index.html
+│   ├── organizer.html
+│   ├── participant.html
+│   ├── app.js         # 共通API呼び出しロジック
+│   ├── organizer.js
+│   └── participant.js
+└── package.json
+```
+
 ## システム要件
 
 - **Node.js** 12.0.0 以上
@@ -18,7 +36,9 @@ npm install
 
 このコマンドで `express` と `cors` がインストールされます。
 
-### 2. サーバーの起動
+### 2. ローカルテスト
+
+#### サーバーの起動
 
 ```bash
 npm start
@@ -37,13 +57,70 @@ TCGマッチングシステム サーバー起動: http://localhost:3000
 ブラウザで http://localhost:3000 を開いてください
 ```
 
-### 3. ブラウザでアクセス
-
-ブラウザで以下のURLにアクセスしてください：
+#### ブラウザでアクセス
 
 ```
 http://localhost:3000
 ```
+
+ローカル開発時は API の自動ローカルホスト接続に対応しています。
+
+## デプロイメント
+
+### バックエンド（Render）の公開
+
+1. **Render にログイン**
+   - https://render.com にアクセス
+
+2. **新規 Web Service を作成**
+   - リポジトリを接続
+   - Runtime: Node.js
+   - Build command: `npm install`
+   - Start command: `node server.js`
+
+3. **環境変数の設定（オプション）**
+   - 必要に応じて PORT などを設定
+
+4. **デプロイ**
+   - Render が自動的にデプロイ
+   - 公開 URL を取得（例：`https://example.onrender.com`）
+
+### フロントエンド（Vercel）の公開
+
+#### 方法1: public フォルダのみを Vercel にデプロイ
+
+1. **Vercel にログイン**
+   - https://vercel.com にアクセス
+
+2. **`public` フォルダを新規プロジェクトとして作成**
+   - または手動で `public` フォルダの内容をアップロード
+
+3. **API_URL を Render の URL に変更**
+   - [API_URL の設定](#api_urlの設定) を参照
+
+#### 方法2: 同じリポジトリから分割デプロイ
+
+- Vercel 側で Root Directory を `public` に設定
+- `package.json` は不要（静的ファイルのみ）
+
+### API_URL の設定
+
+#### ローカル開発時
+
+`public/app.js` の API_URL（現在は自動で localhost を使用）
+
+#### Render デプロイ時
+
+`public/app.js` の API_URL を変更：
+
+```javascript
+// Render のバックエンド URL に変更
+const API_URL = 'https://your-render-app.onrender.com/api';
+```
+
+**重要**: Render と Vercel にデプロイしている場合
+- Render のバックエンドが CORS を許可していることを確認
+- Vercel のフロント URL が Render の CORS ホワイトリストに含まれていることを確認
 
 ## 使い方
 
@@ -125,13 +202,15 @@ npm list
 TCGmatchingsystem/
 ├── server.js              # Node.js Express サーバー
 ├── package.json           # 依存パッケージ定義
-├── index.html            # ホーム画面
-├── organizer.html        # 開催者画面
-├── participant.html      # 参加者画面
-├── app.js                # 共通JavaScript（API対応）
-├── organizer.js          # 開催者画面のロジック
-├── participant.js        # 参加者画面のロジック
-├── tournaments.json      # 大会データ（自動生成）
+├── tournaments.json       # 大会データ（自動生成）
+├── backup.json           # バックアップデータ
+├── public/               # フロントエンドファイル
+│   ├── index.html       # ホーム画面
+│   ├── organizer.html   # 開催者画面
+│   ├── participant.html # 参加者画面
+│   ├── app.js           # 共通JavaScript（API対応）
+│   ├── organizer.js     # 開催者画面のロジック
+│   └── participant.js   # 参加者画面のロジック
 └── README.md            # このファイル
 ```
 
@@ -143,53 +222,46 @@ TCGmatchingsystem/
 PORT=8080 npm start
 ```
 
-## 公開方法
+## マルチデバイス対応
 
-このアプリは、フロントエンドを Vercel、バックエンドを Render で公開する構成を想定しています。
+- **スマートフォン**: フルレスポンシブ対応
+- **タブレット**: 最適化されたレイアウト
+- **PC**: デスクトップ向けUI
 
-### フロントエンド
+異なるデバイスから同じ大会コードでアクセス可能です。
 
-- `public/` フォルダ内の `index.html` / `organizer.html` / `participant.html` / `app.js` などを Vercel にデプロイします。
-- フロントエンドは Vercel のホスト上で動作し、RenderのAPIを呼び出します。
+## トラブルシューティング
 
-### バックエンド
+### サーバーが起動しない
 
-- `server.js` を Render で動かします。
-- `server.js` は `public/` フォルダを静的配信し、APIルートを提供します。
+```bash
+# Node.jsがインストールされているか確認
+node --version
 
-### APIのURL設定
-
-フロントエンドの `public/app.js` で `API_URL` を更新してください。
-
-```js
-const API_URL = 'https://your-app.onrender.com/api';
+# npm モジュールが正しくインストールされているか確認
+npm list
 ```
 
-### Renderでの基本設定
+### 大会が見つからない
 
-- ビルドコマンド: `npm install`
-- 起動コマンド: `npm start`
-- ポート: 自動で `PORT` 環境変数が割り当てられます
+- 大会コードが正しく入力されているか確認
+- サーバーが起動しているか確認
+- 異なるブラウザでアクセスしてみてください
 
-### Vercelでの基本設定
+### リアルタイム更新が遅い
 
-- GitHubリポジトリをVercelに接続
-- `public/` を静的サイトとして公開
-- `public/app.js` の `API_URL` を Render の URL に変更
+- ネットワーク接続を確認
+- ブラウザのキャッシュをクリア
+- ページをリロード
 
-### 例
+### CORS エラーが発生する場合
 
-- Renderバックエンド: `https://your-app.onrender.com`
-- Vercelフロントエンド: `https://your-app.vercel.app`
+Render と Vercel でデプロイしている場合：
+- Render のバックエンドが CORS を許可していることを確認
+- Vercel のフロント URL が Render の CORS 許可リストに含まれているか確認
 
-## もっと簡単に公開するなら
-
-RenderやRailwayなら、GitHubリポジトリを接続して自動デプロイを有効にするだけで公開できます。
+ブラウザのコンソール（F12）でエラー内容を確認してください。
 
 ## ライセンス
 
 MIT
-
-## サポート
-
-問題が発生した場合は、ブラウザの開発者コンソール（F12キー）でエラーメッセージを確認してください。
