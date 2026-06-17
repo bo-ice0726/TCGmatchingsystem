@@ -1,0 +1,255 @@
+[
+  {
+    "id": "WDEZ-1389",
+    "name": "大会",
+    "format": "swiss",
+    "createdAt": "2026-06-16T00:48:02.554Z",
+    "status": "started",
+    "participants": {
+      "ぼーあいす": {
+        "name": "ぼーあいす",
+        "joinedAt": "2026-06-16T00:50:15.454Z"
+      },
+      "んじゅ": {
+        "name": "んじゅ",
+        "joinedAt": "2026-06-16T00:51:24.059Z"
+      },
+      "あ": {
+        "name": "あ",
+        "joinedAt": "2026-06-16T01:17:27.734Z"
+      }
+    },
+    "matches": [],
+    "currentRound": 1,
+    "winCounts": {
+      "ぼーあいす": 0,
+      "んじゅ": 0,
+      "あ": 0
+    },
+    "lossCounts": {
+      "ぼーあいす": 0,
+      "んじゅ": 0,
+      "あ": 0
+    },
+    "pairHistory": []
+  },
+  {
+    "id": "9JCS-2685",
+    "name": "大会",
+    "format": "swiss",
+    "createdAt": "2026-06-16T00:55:09.986Z",
+    "status": "started",
+    "participants": {
+      "ぼーあいす": {
+        "name": "ぼーあいす",
+        "joinedAt": "2026-06-16T00:55:24.692Z"
+      },
+      "んじゅ": {
+        "name": "んじゅ",
+        "joinedAt": "2026-06-16T00:55:31.779Z"
+      }
+    },
+    "matches": [],
+    "currentRound": 1,
+    "winCounts": {
+      "ぼーあいす": 0,
+      "んじゅ": 0
+    },
+    "lossCounts": {
+      "ぼーあいす": 0,
+      "んじゅ": 0
+    },
+    "pairHistory": []
+  },
+  {
+    "id": "ECQK-4731",
+    "name": "大会",
+    "format": "swiss",
+    "createdAt": "2026-06-16T01:00:24.323Z",
+    "status": "started",
+    "participants": {
+      "ぼーあいす": {
+        "name": "ぼーあいす",
+        "joinedAt": "2026-06-16T01:00:36.726Z"
+      },
+      "んじゅ": {
+        "name": "んじゅ",
+        "joinedAt": "2026-06-16T01:00:43.852Z"
+      }
+    },
+    "matches": [],
+    "currentRound": 1,
+    "winCounts": {
+      "ぼーあいす": 0,
+      "んじゅ": 0
+    },
+    "lossCounts": {
+      "ぼーあいす": 0,
+      "んじゅ": 0
+    },
+    "pairHistory": []
+  },
+  {
+    "id": "DBNQ-6572",
+    "name": "大会",
+    "format": "swiss",
+    "createdAt": "2026-06-16T01:04:17.098Z",
+    "status": "started",
+    "participants": {
+      "ぼーあいす": {
+        "name": "ぼーあいす",
+        "joinedAt": "2026-06-16T01:04:37.049Z"
+      },
+      "んじゅ": {
+        "name": "んじゅ",
+        "joinedAt": "2026-06-16T01:04:46.597Z"
+      }
+    },
+    "matches": [],
+    "currentRound": 1,
+    "winCounts": {
+      "ぼーあいす": 0,
+      "んじゅ": 0
+    },
+    "lossCounts": {
+      "ぼーあいす": 0,
+      "んじゅ": 0
+    },
+    "pairHistory": []
+  },
+  {
+    "id": "FFOV-9140",
+    "name": "大会",
+    "format": "swiss",
+    "createdAt": "2026-06-16T01:05:48.879Z",
+    "status": "started",
+    "participants": {
+      "ぼーあいす": {
+        "name": "ぼーあいす",
+        "joinedAt": "2026-06-16T01:06:05.551Z"
+      },
+      "んじゅ": {
+        "name": "んじゅ",
+        "joinedAt": "2026-06-16T01:06:13.396Z"
+      }
+    },
+    "matches": [],
+    "currentRound": 1,
+    "winCounts": {
+      "ぼーあいす": 0,
+      "んじゅ": 0
+    },
+    "lossCounts": {
+      "ぼーあいす": 0,
+      "んじゅ": 0
+    },
+    "pairHistory": []
+  },
+  {
+    "id": "0YUJ-5996",
+    "name": "大会",
+    "format": "swiss",
+    "createdAt": "2026-06-16T01:08:37.828Z",
+    "status": "started",
+    "participants": {
+      "ぼーあいす": {
+        "name": "ぼーあいす",
+        "joinedAt": "2026-06-16T01:08:48.381Z"
+      },
+      "んじゅ": {
+        "name": "んじゅ",
+        "joinedAt": "2026-06-16T01:08:54.876Z"
+      }
+    },
+    "matches": [
+      {
+        "id": "1-1",
+        "round": 1,
+        "number": 1,
+        "player1": "ぼーあいす",
+        "player2": "んじゅ",
+        "winner": "ぼーあいす",
+        "approved": true
+      },
+      {
+        "id": "2-1",
+        "round": 2,
+        "number": 1,
+        "player1": "ぼーあいす",
+        "player2": "んじゅ",
+        "winner": "ぼーあいす",
+        "approved": true
+      },
+      {
+        "id": "3-1",
+        "round": 3,
+        "number": 1,
+        "player1": "んじゅ",
+        "player2": "ぼーあいす",
+        "winner": null,
+        "approved": false
+      }
+    ],
+    "currentRound": 3,
+    "winCounts": {
+      "ぼーあいす": 2,
+      "んじゅ": 0
+    },
+    "lossCounts": {
+      "ぼーあいす": 0,
+      "んじゅ": 2
+    },
+    "pairHistory": []
+  },
+  {
+    "id": "Y8RZ-7879",
+    "name": "大会",
+    "format": "swiss",
+    "createdAt": "2026-06-16T01:16:13.130Z",
+    "status": "finished",
+    "participants": {
+      "んじゅ": {
+        "name": "んじゅ",
+        "joinedAt": "2026-06-16T01:16:32.835Z"
+      },
+      "ぼーあいす": {
+        "name": "ぼーあいす",
+        "joinedAt": "2026-06-16T01:16:34.937Z"
+      }
+    },
+    "matches": [
+      {
+        "id": "1-1",
+        "round": 1,
+        "number": 1,
+        "player1": "ぼーあいす",
+        "player2": "んじゅ",
+        "winner": "ぼーあいす",
+        "approved": true
+      }
+    ],
+    "currentRound": 1,
+    "winCounts": {
+      "んじゅ": 0,
+      "ぼーあいす": 1
+    },
+    "lossCounts": {
+      "んじゅ": 1,
+      "ぼーあいす": 0
+    },
+    "pairHistory": []
+  },
+  {
+    "id": "JPXF-2452",
+    "name": "大会",
+    "format": "swiss",
+    "createdAt": "2026-06-16T16:28:57.950Z",
+    "status": "waiting",
+    "participants": {},
+    "matches": [],
+    "currentRound": 0,
+    "winCounts": {},
+    "lossCounts": {},
+    "pairHistory": []
+  }
+]

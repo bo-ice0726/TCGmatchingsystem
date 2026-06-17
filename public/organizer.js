@@ -117,10 +117,12 @@ function renderParticipants() {
 function renderMatches() {
   const roundInfo = document.getElementById('roundInfo');
   const matchesList = document.getElementById('matchesList');
+  const bracketContainer = document.getElementById('bracketContainer');
 
   if (currentTournament.currentRound === 0) {
     roundInfo.textContent = 'ラウンド: 未開始';
     matchesList.innerHTML = '';
+    bracketContainer.classList.remove('show');
     return;
   }
 
@@ -128,6 +130,7 @@ function renderMatches() {
   
   if (!currentTournament.matches || currentTournament.matches.length === 0) {
     matchesList.innerHTML = '<p style="color: #999;">試合がありません</p>';
+    bracketContainer.classList.remove('show');
     return;
   }
 
@@ -135,20 +138,186 @@ function renderMatches() {
   
   if (currentMatches.length === 0) {
     matchesList.innerHTML = '<p style="color: #999;">このラウンドの試合はまだ生成されていません</p>';
+    bracketContainer.classList.remove('show');
     return;
   }
 
-  matchesList.innerHTML = currentMatches.map((match, idx) => `
-    <div class="match-item">
-      <div class="match-header">第${match.number}試合</div>
-      <div class="match-result">
-        ${match.player1} vs ${match.player2 || '(不戦勝)'}
-        ${match.winner ? `<br/><strong>勝者: ${match.winner}</strong>` : '<br/>未決定'}
-        ${match.approved ? '<br/>✓ 承認済み' : (match.winner ? '<br/>⏳ 承認待ち' : '')}
-      </div>
-    </div>
-  `).join('');
+  // マッチカードの表示
+  matchesList.innerHTML = renderMatchCards(currentMatches);
+
+  // トーナメント形式の場合、ブラケット表示
+  if (currentTournament.format === 'tournament') {
+    renderTournamentBracket();
+  } else {
+    bracketContainer.classList.remove('show');
+  }
 }
+
+/**
+ * マッチの状態を判定（"pending" | "win" | "loss" | "approved"）
+ */
+function getMatchStatus(match) {
+  if (!match.winner) {
+    return 'pending';
+  }
+  if (match.approved) {
+    return 'approved';
+  }
+  // 不戦勝の場合も approved扱い
+  if (!match.player2) {
+    return 'approved';
+  }
+  return 'win';
+}
+
+/**
+ * マッチカードのHTMLを生成
+ */
+function renderMatchCards(matches) {
+  return matches.map((match) => {
+    const status = getMatchStatus(match);
+    const statusMap = {
+      'pending': { badge: '未決定', class: 'badge-pending' },
+      'win': { badge: '勝者確定', class: 'badge-win' },
+      'loss': { badge: '敗北', class: 'badge-loss' },
+      'approved': { badge: '✓ 確定済み', class: 'badge-approved' }
+    };
+    
+    const statusInfo = statusMap[status] || statusMap['pending'];
+    
+    return `
+      <div class="match-card status-${status}">
+        <div class="match-card-header">
+          <span class="match-round">ラウンド ${match.round} - 第${match.number}試合</span>
+          <span class="match-status-badge ${statusInfo.class}">${statusInfo.badge}</span>
+        </div>
+        
+        <div class="match-players">
+          <span class="player-name">${match.player1}</span>
+          <span class="vs-text">vs</span>
+          <span class="player-name">${match.player2 || '(不戦勝)'}</span>
+        </div>
+        
+        ${match.winner ? `
+          <div style="text-align: center; margin: 10px 0; padding: 8px; background: rgba(40, 167, 69, 0.1); border-radius: 4px;">
+            <strong style="color: #28a745;">勝者: ${match.winner}</strong>
+          </div>
+        ` : ''}
+        
+        ${!match.player2 ? `
+          <div style="text-align: center; margin: 10px 0; padding: 8px; background: rgba(23, 162, 184, 0.1); border-radius: 4px;">
+            <strong style="color: #17a2b8;">不戦勝</strong>
+          </div>
+        ` : ''}
+        
+        <div class="match-actions">
+          ${!match.winner && match.player2 ? `
+            <button class="btn-winner" onclick="recordWinner('${match.id}', '${match.player1}')">
+              ${match.player1} が勝利
+            </button>
+            <button class="btn-winner" onclick="recordWinner('${match.id}', '${match.player2}')">
+              ${match.player2} が勝利
+            </button>
+          ` : ''}
+          ${match.winner && !match.approved ? `
+            <button class="btn-winner" style="background: #6c757d;" disabled>
+              ⏳ 相手の承認待ち
+            </button>
+          ` : ''}
+          ${match.approved ? `
+            <button class="btn-winner" style="background: #17a2b8;" disabled>
+              ✓ 確定済み
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * トーナメント表を生成（ブラケット表示）
+ */
+function renderTournamentBracket() {
+  const bracketContainer = document.getElementById('bracketContainer');
+  const bracket = document.getElementById('bracket');
+  
+  if (currentTournament.format !== 'tournament') {
+    bracketContainer.classList.remove('show');
+    return;
+  }
+
+  // ラウンドごとにグループ化
+  const rounds = {};
+  currentTournament.matches.forEach(match => {
+    if (!rounds[match.round]) {
+      rounds[match.round] = [];
+    }
+    rounds[match.round].push(match);
+  });
+
+  // ブラケットのHTML生成
+  let bracketHTML = '';
+  const sortedRounds = Object.keys(rounds).sort((a, b) => parseInt(a) - parseInt(b));
+
+  sortedRounds.forEach(roundNum => {
+    const roundMatches = rounds[roundNum];
+    const roundLabel = roundNum === '1' ? '1回戦' : (roundNum === '2' ? '準決勝' : (roundNum === '3' ? '決勝' : `ラウンド${roundNum}`));
+    
+    bracketHTML += `
+      <div class="bracket-round">
+        <div class="bracket-round-title">${roundLabel}</div>
+    `;
+
+    roundMatches.forEach(match => {
+      const isWinner = match.winner && !match.approved ? 'winner' : '';
+      const isEmpty = !match.player2 && !match.winner ? 'empty' : '';
+      
+      bracketHTML += `
+        <div class="bracket-match ${isWinner} ${isEmpty}">
+          <div class="bracket-match-text">
+            ${match.winner ? `<strong>${match.winner}</strong>` : 
+              (match.player2 ? `${match.player1} vs ${match.player2}` : 
+               `${match.player1} (不戦勝)`)}
+          </div>
+        </div>
+      `;
+    });
+
+    bracketHTML += `</div>`;
+  });
+
+  bracket.innerHTML = bracketHTML;
+  bracketContainer.classList.add('show');
+}
+
+/**
+ * 勝者を記録する関数
+ */
+function recordWinner(matchId, winner) {
+  const match = currentTournament.matches.find(m => m.id === matchId);
+  if (!match) return;
+
+  match.winner = winner;
+  const loser = match.player1 === winner ? match.player2 : match.player1;
+
+  // 敗北者の敗北数を増加
+  currentTournament.lossCounts[loser]++;
+
+  (async () => {
+    try {
+      await manager.updateTournament(currentTournament.id, { 
+        matches: currentTournament.matches,
+        lossCounts: currentTournament.lossCounts
+      });
+      currentTournament = await manager.getTournament(currentTournament.id);
+      renderMatches();
+    } catch (error) {
+      alert('失敗しました: ' + error.message);
+    }
+  })();
+}
+
 
 function startTournament() {
   if (Object.keys(currentTournament.participants).length === 0) {
