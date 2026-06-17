@@ -438,6 +438,7 @@ async function finishTournament() {
     await manager.updateTournament(currentTournament.id, { status: 'finished' });
     currentTournament = await manager.getTournament(currentTournament.id);
     renderTournamentInfo();
+    window.location.href = 'index.html';
   } catch (error) {
     alert('大会を終了できません: ' + error.message);
   }
