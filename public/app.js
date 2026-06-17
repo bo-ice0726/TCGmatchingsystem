@@ -1,5 +1,5 @@
 // API ベースURL（Render のバックエンド URL をここで変更できます）
-const API_URL = 'https://tcgmatchingsystem.onrender.com';
+const API_URL = 'https://tcgmatchingsystem.onrender.com/api';
 
 // ブラウザ互換性チェック
 function checkBrowserCompatibility() {
