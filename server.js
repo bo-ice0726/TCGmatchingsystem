@@ -1,4 +1,3 @@
-const BACKUP_FILE = path.join(__dirname, 'backup.json');
 
 const express = require('express');
 const cors = require('cors');
@@ -8,6 +7,8 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'tournaments.json');
+const BACKUP_FILE = path.join(__dirname, 'backup.json');
+
 
 // ミドルウェア
 app.use(cors());
