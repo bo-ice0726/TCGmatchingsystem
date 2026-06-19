@@ -192,6 +192,24 @@
       font-size: 11px;
       word-break: break-word;
     }
+
+    /* 順位表スタイル */
+    #ranking h3 {
+      color: #0066cc;
+      margin-bottom: 15px;
+      font-size: 1.1rem;
+    }
+    #ranking ol {
+      list-style-position: inside;
+      padding: 10px 0;
+    }
+    #ranking li {
+      padding: 8px 12px;
+      background: #f9f9f9;
+      margin-bottom: 6px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
     
     @media (max-width: 1024px) {
       .main { grid-template-columns: 1fr; }
@@ -266,6 +284,11 @@
   <div class="bracket-container" id="bracketContainer">
     <h2 style="margin-bottom: 20px; color: #0066cc;">📊 トーナメント表</h2>
     <div class="bracket" id="bracket"></div>
+  </div>
+
+  <!-- 現在順位表示 -->
+  <div class="panel">
+    <div id="ranking"></div>
   </div>
 </div>
 

@@ -114,6 +114,38 @@ function renderParticipants() {
   ).join('');
 }
 
+/**
+ * 現在順位を表示する関数
+ */
+function renderRanking() {
+  const rankingContainer = document.getElementById('ranking');
+  if (!rankingContainer) return;
+
+  const players = Object.keys(currentTournament.participants);
+
+  // プレイヤーをソート：勝利数の多い順、同率の場合は敗北数が少ない順
+  players.sort((a, b) => {
+    const winDiff = (currentTournament.winCounts[b] || 0) - (currentTournament.winCounts[a] || 0);
+    if (winDiff !== 0) return winDiff;
+
+    return (currentTournament.lossCounts[a] || 0) - (currentTournament.lossCounts[b] || 0);
+  });
+
+  let html = '<h3>🏆 現在順位</h3><ol style="list-style-position: inside;">';
+
+  players.forEach((p, index) => {
+    const wins = currentTournament.winCounts[p] || 0;
+    const losses = currentTournament.lossCounts[p] || 0;
+    const medal = ['🥇', '🥈', '🥉'][index] || '　';
+
+    html += `<li style="margin-bottom: 8px;">${medal} ${p}（${wins}勝${losses}敗）</li>`;
+  });
+
+  html += '</ol>';
+
+  rankingContainer.innerHTML = html;
+}
+
 function renderMatches() {
   const roundInfo = document.getElementById('roundInfo');
   const matchesList = document.getElementById('matchesList');
@@ -123,6 +155,7 @@ function renderMatches() {
     roundInfo.textContent = 'ラウンド: 未開始';
     matchesList.innerHTML = '';
     bracketContainer.classList.remove('show');
+    renderRanking();
     return;
   }
 
@@ -131,6 +164,7 @@ function renderMatches() {
   if (!currentTournament.matches || currentTournament.matches.length === 0) {
     matchesList.innerHTML = '<p style="color: #999;">試合がありません</p>';
     bracketContainer.classList.remove('show');
+    renderRanking();
     return;
   }
 
@@ -139,6 +173,7 @@ function renderMatches() {
   if (currentMatches.length === 0) {
     matchesList.innerHTML = '<p style="color: #999;">このラウンドの試合はまだ生成されていません</p>';
     bracketContainer.classList.remove('show');
+    renderRanking();
     return;
   }
 
@@ -151,6 +186,9 @@ function renderMatches() {
   } else {
     bracketContainer.classList.remove('show');
   }
+
+  // 順位表を表示
+  renderRanking();
 }
 
 /**
@@ -312,6 +350,7 @@ function recordWinner(matchId, winner) {
       });
       currentTournament = await manager.getTournament(currentTournament.id);
       renderMatches();
+      renderRanking();
     } catch (error) {
       alert('失敗しました: ' + error.message);
     }
@@ -344,36 +383,134 @@ function startTournament() {
   })();
 }
 
-function generateMatches() {
+/**
+ * 2つのプレイヤーが既に対戦済みかチェック
+ */
+function hasPaired(player1, player2) {
+  if (!currentTournament.pairHistory) {
+    return false;
+  }
+  const key = [player1, player2].sort().join('|');
+  return currentTournament.pairHistory.includes(key);
+}
+
+/**
+ * スイスドロー用のマッチング生成関数（勝利数ベース）
+ */
+function generateSwissMatches() {
   const participants = Object.keys(currentTournament.participants);
-  const shuffled = shuffle([...participants]);
   const newMatches = [];
   let matchNumber = 1;
 
-  for (let i = 0; i < shuffled.length; i += 2) {
-    const player1 = shuffled[i];
-    const player2 = shuffled[i + 1] || null;
+  // 初期化：敗北数がなければ0にセット
+  participants.forEach(p => {
+    if (!(p in currentTournament.lossCounts)) {
+      currentTournament.lossCounts[p] = 0;
+    }
+  });
 
-    newMatches.push({
-      id: `${currentTournament.currentRound}-${matchNumber}`,
-      round: currentTournament.currentRound,
-      number: matchNumber,
-      player1,
-      player2,
-      winner: null,
-      approved: false
-    });
+  // 1. プレイヤーを勝利数でグループ分け
+  const groupedByWins = {};
+  participants.forEach(p => {
+    const wins = currentTournament.winCounts[p] || 0;
+    if (!groupedByWins[wins]) {
+      groupedByWins[wins] = [];
+    }
+    groupedByWins[wins].push(p);
+  });
 
+  // 2. 各グループをshuffleしてランダム化
+  Object.keys(groupedByWins).forEach(wins => {
+    groupedByWins[wins] = shuffle([...groupedByWins[wins]]);
+  });
+
+  const winCounts = Object.keys(groupedByWins)
+    .map(Number)
+    .sort((a, b) => b - a); // 降順（勝利数が多い順）
+
+  const availablePlayers = new Set(participants);
+  const pairs = [];
+
+  // 3. マッチング処理
+  for (const wins of winCounts) {
+    const group = groupedByWins[wins].filter(p => availablePlayers.has(p));
+
+    while (group.length >= 2) {
+      const player1 = group.shift();
+      availablePlayers.delete(player1);
+
+      // 同じ勝利数グループ内から対戦相手を探す
+      let player2 = null;
+      for (let i = 0; i < group.length; i++) {
+        if (!hasPaired(player1, group[i])) {
+          player2 = group[i];
+          group.splice(i, 1);
+          break;
+        }
+      }
+
+      // 同勝利数でペアが組めない場合は、勝利数が近いプレイヤーを探す
+      if (!player2) {
+        for (let i = 0; i < group.length; i++) {
+          player2 = group[i];
+          group.splice(i, 1);
+          break;
+        }
+      }
+
+      if (player2) {
+        availablePlayers.delete(player2);
+        pairs.push([player1, player2]);
+      } else {
+        // ペアが組めない場合は戻す
+        group.unshift(player1);
+        availablePlayers.add(player1);
+      }
+    }
+  }
+
+  // 4. 残った奇数人数と他グループのプレイヤーをマッチング
+  const leftoverPlayers = Array.from(availablePlayers);
+
+  // 他グループとのマッチング
+  for (let i = 0; i < leftoverPlayers.length - 1; i += 2) {
+    pairs.push([leftoverPlayers[i], leftoverPlayers[i + 1]]);
+  }
+
+  // 5. 不戦勝の処理（奇数の場合）
+  if ((participants.length - pairs.length * 2) === 1) {
+    const byePlayer = Array.from(availablePlayers)[0];
+    pairs.push([byePlayer, null]);
+  }
+
+  // 6. マッチオブジェクトを生成
+  pairs.forEach(([player1, player2]) => {
     if (player2) {
       recordPairing(player1, player2);
+      newMatches.push({
+        id: `${currentTournament.currentRound}-${matchNumber}`,
+        round: currentTournament.currentRound,
+        number: matchNumber,
+        player1,
+        player2,
+        winner: null,
+        approved: false
+      });
     } else {
-      newMatches[matchNumber - 1].winner = player1;
-      newMatches[matchNumber - 1].approved = true;
+      // 不戦勝
+      newMatches.push({
+        id: `${currentTournament.currentRound}-${matchNumber}`,
+        round: currentTournament.currentRound,
+        number: matchNumber,
+        player1,
+        player2: null,
+        winner: player1,
+        approved: true
+      });
       currentTournament.winCounts[player1]++;
     }
-
     matchNumber++;
-  }
+  });
 
   currentTournament.matches = [...currentTournament.matches, ...newMatches];
 
@@ -381,12 +518,68 @@ function generateMatches() {
     try {
       await manager.updateTournament(currentTournament.id, {
         matches: currentTournament.matches,
-        winCounts: currentTournament.winCounts
+        winCounts: currentTournament.winCounts,
+        lossCounts: currentTournament.lossCounts
       });
     } catch (error) {
       console.error('Failed to update matches:', error);
     }
   })();
+}
+
+/**
+ * トーナメント形式と仗スイスドロー形式を判定してマッチング生成
+ */
+function generateMatches() {
+  // トーナメント形式の場合は既存ロジックを使用
+  if (currentTournament.format === 'tournament') {
+    const participants = Object.keys(currentTournament.participants);
+    const shuffled = shuffle([...participants]);
+    const newMatches = [];
+    let matchNumber = 1;
+
+    for (let i = 0; i < shuffled.length; i += 2) {
+      const player1 = shuffled[i];
+      const player2 = shuffled[i + 1] || null;
+
+      newMatches.push({
+        id: `${currentTournament.currentRound}-${matchNumber}`,
+        round: currentTournament.currentRound,
+        number: matchNumber,
+        player1,
+        player2,
+        winner: null,
+        approved: false
+      });
+
+      if (player2) {
+        recordPairing(player1, player2);
+      } else {
+        newMatches[matchNumber - 1].winner = player1;
+        newMatches[matchNumber - 1].approved = true;
+        currentTournament.winCounts[player1]++;
+      }
+
+      matchNumber++;
+    }
+
+    currentTournament.matches = [...currentTournament.matches, ...newMatches];
+
+    (async () => {
+      try {
+        await manager.updateTournament(currentTournament.id, {
+          matches: currentTournament.matches,
+          winCounts: currentTournament.winCounts
+        });
+      } catch (error) {
+        console.error('Failed to update matches:', error);
+      }
+    })();
+    return;
+  }
+
+  // スイスドロー形式の場合は改良版マッチング
+  generateSwissMatches();
 }
 
 /**
@@ -461,6 +654,7 @@ function nextRound() {
       })();
 
       renderTournamentInfo();
+      renderRanking();
       return;
     }
 
@@ -482,6 +676,7 @@ function nextRound() {
 
     renderTournamentInfo();
     renderMatches();
+    renderRanking();
     return;
   }
 
@@ -504,6 +699,7 @@ function nextRound() {
     })();
 
     renderTournamentInfo();
+    renderRanking();
     return;
   }
 
@@ -519,6 +715,7 @@ function nextRound() {
 
   renderTournamentInfo();
   renderMatches();
+  renderRanking();
 }
 
 async function finishTournament() {
