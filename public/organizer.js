@@ -340,7 +340,9 @@ function recordWinner(matchId, winner) {
   const loser = match.player1 === winner ? match.player2 : match.player1;
 
   // 敗北者の敗北数を増加
+  if (loser) {
   currentTournament.lossCounts[loser]++;
+  }
 
   (async () => {
     try {
@@ -399,7 +401,7 @@ function hasPaired(player1, player2) {
  */
 function generateSwissMatches() {
   const participants = Object.keys(currentTournament.participants);
-  const newMatches = [];
+  
   let matchNumber = 1;
 
   // 初期化：敗北数がなければ0にセット
@@ -471,6 +473,12 @@ function generateSwissMatches() {
 
   // 4. 残った奇数人数と他グループのプレイヤーをマッチング
   const leftoverPlayers = Array.from(availablePlayers);
+
+  
+  leftoverPlayers.sort((a, b) => {
+    return (currentTournament.winCounts[b] || 0)
+        - (currentTournament.winCounts[a] || 0);
+  });
 
   // 他グループとのマッチング
   for (let i = 0; i < leftoverPlayers.length - 1; i += 2) {
