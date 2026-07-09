@@ -512,31 +512,39 @@ function generateSwissMatches() {
   }
 
   // 4. 残った奇数人数と他グループのプレイヤーをマッチング
-  const leftoverPlayers = Array.from(availablePlayers);
-
-  
-  leftoverPlayers.sort((a, b) => {
-    return (currentTournament.winCounts[b] || 0)
-        - (currentTournament.winCounts[a] || 0);
-  });
-
-  // 他グループとのマッチング
-  for (let i = 0; i < leftoverPlayers.length - 1; i += 2) {
-    pairs.push([leftoverPlayers[i], leftoverPlayers[i + 1]]);
-  }
+  let leftoverPlayers = Array.from(availablePlayers);
 
   // 5. 不戦勝の処理（奇数の場合）
   // ルール：勝利数最小 → BYE回数最小 → ランダム で選択
-  if ((participants.length - pairs.length * 2) === 1) {
-    const byePlayers = Array.from(availablePlayers);
+  if (leftoverPlayers.length % 2 === 1) {
+    const byeCandidates = [...leftoverPlayers];
 
-    const minWins = Math.min(...byePlayers.map(p => currentTournament.winCounts[p] || 0));
-    let candidates = byePlayers.filter(p => (currentTournament.winCounts[p] || 0) === minWins);
+    console.log('BYE Candidate pool', byeCandidates.map(p => ({
+      player: p,
+      wins: currentTournament.winCounts[p] || 0,
+      byeCount: currentTournament.byeCounts[p] || 0
+    })));
+
+    const minWins = Math.min(...byeCandidates.map(p => currentTournament.winCounts[p] || 0));
+    let candidates = byeCandidates.filter(p => (currentTournament.winCounts[p] || 0) === minWins);
+
+    console.log('BYE minWins', minWins, 'initial candidates', candidates.map(p => ({
+      player: p,
+      wins: currentTournament.winCounts[p] || 0,
+      byeCount: currentTournament.byeCounts[p] || 0
+    })));
 
     if (candidates.length > 1) {
       const minByeCount = Math.min(...candidates.map(p => currentTournament.byeCounts[p] || 0));
       candidates = candidates.filter(p => (currentTournament.byeCounts[p] || 0) === minByeCount);
+      console.log('BYE minByeCount', minByeCount, 'filtered candidates', candidates.map(p => ({
+        player: p,
+        wins: currentTournament.winCounts[p] || 0,
+        byeCount: currentTournament.byeCounts[p] || 0
+      })));
     }
+
+    console.log('BYE Candidates', candidates);
 
     let byePlayer;
     if (candidates.length === 1) {
@@ -545,12 +553,26 @@ function generateSwissMatches() {
       byePlayer = candidates[Math.floor(Math.random() * candidates.length)];
     }
 
+    console.log('Selected BYE', byePlayer);
+
     pairs.push([byePlayer, null]);
 
     // BYE回数を増加
     currentTournament.byeCounts[byePlayer]++;
     // BYEプレイヤーには勝利数を1加算
     currentTournament.winCounts[byePlayer]++;
+
+    leftoverPlayers = leftoverPlayers.filter(p => p !== byePlayer);
+  }
+
+  leftoverPlayers.sort((a, b) => {
+    return (currentTournament.winCounts[b] || 0)
+        - (currentTournament.winCounts[a] || 0);
+  });
+
+  // 他グループとのマッチング
+  for (let i = 0; i < leftoverPlayers.length - 1; i += 2) {
+    pairs.push([leftoverPlayers[i], leftoverPlayers[i + 1]]);
   }
 
   // 6. マッチオブジェクトを生成
