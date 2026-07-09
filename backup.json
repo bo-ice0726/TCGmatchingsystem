@@ -251,5 +251,18 @@
     "winCounts": {},
     "lossCounts": {},
     "pairHistory": []
+  },
+  {
+    "id": "M8PA-8668",
+    "name": "大会",
+    "format": "swiss",
+    "createdAt": "2026-06-17T19:38:05.715Z",
+    "status": "waiting",
+    "participants": {},
+    "matches": [],
+    "currentRound": 0,
+    "winCounts": {},
+    "lossCounts": {},
+    "pairHistory": []
   }
 ]

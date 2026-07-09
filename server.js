@@ -82,7 +82,14 @@ class TournamentManager {
   }
 
   getTournament(code) {
-    return this.tournaments[code] || null;
+    const tournament = this.tournaments[code] || null;
+    if (!tournament) return null;
+
+    if (!tournament.byeCounts) {
+      tournament.byeCounts = {};
+    }
+
+    return tournament;
   }
 
   joinTournament(code, playerName) {
@@ -96,6 +103,7 @@ class TournamentManager {
     };
     tournament.winCounts[playerName] = 0;
     tournament.lossCounts[playerName] = 0;
+    tournament.byeCounts[playerName] = 0;
 
     return true;
   }

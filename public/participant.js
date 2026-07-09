@@ -17,6 +17,14 @@ async function loadTournament() {
 
   try {
     currentTournament = await manager.getTournament(code);
+    if (!currentTournament.byeCounts) {
+      currentTournament.byeCounts = {};
+    }
+    Object.keys(currentTournament.participants || {}).forEach(player => {
+      if (!(player in currentTournament.byeCounts)) {
+        currentTournament.byeCounts[player] = 0;
+      }
+    });
   } catch (error) {
     alert('大会が見つかりません');
     window.location.href = 'index.html';

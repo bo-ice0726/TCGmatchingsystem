@@ -32,6 +32,20 @@ function recordPairing(player1, player2) {
 let currentTournament = null;
 let updateInterval = null;
 
+function ensureSwissState() {
+  if (!currentTournament) return;
+
+  if (!currentTournament.byeCounts) {
+    currentTournament.byeCounts = {};
+  }
+
+  Object.keys(currentTournament.participants || {}).forEach(player => {
+    if (!(player in currentTournament.byeCounts)) {
+      currentTournament.byeCounts[player] = 0;
+    }
+  });
+}
+
 function getCodeFromURL() {
   const params = new URLSearchParams(window.location.search);
   return params.get('code');
@@ -46,6 +60,7 @@ async function loadTournament() {
 
   try {
     currentTournament = await manager.getTournament(code);
+    ensureSwissState();
     renderTournamentInfo();
     renderParticipants();
     renderMatches();
@@ -426,9 +441,10 @@ function hasPaired(player1, player2) {
  * - 奇数人数の場合、最後の1人は不戦勝（勝利数+1）
  */
 function generateSwissMatches() {
+  ensureSwissState();
+
   const participants = Object.keys(currentTournament.participants);
   
-  // FIX #1: newMatches初期化（未定義問題を解消）
   const newMatches = [];
   let matchNumber = 1;
 
@@ -513,25 +529,15 @@ function generateSwissMatches() {
   // ルール：勝利数最小 → BYE回数最小 → ランダム で選択
   if ((participants.length - pairs.length * 2) === 1) {
     const byePlayers = Array.from(availablePlayers);
-    
-    // 初期化：byeCountsがなければ0にセット
-    byePlayers.forEach(p => {
-      if (!(p in currentTournament.byeCounts)) {
-        currentTournament.byeCounts[p] = 0;
-      }
-    });
 
-    // 1. 勝利数が最も少ないプレイヤーをフィルタリング
     const minWins = Math.min(...byePlayers.map(p => currentTournament.winCounts[p] || 0));
     let candidates = byePlayers.filter(p => (currentTournament.winCounts[p] || 0) === minWins);
 
-    // 2. 候補が複数いる場合、過去BYE回数が最も少ないプレイヤーをフィルタリング
     if (candidates.length > 1) {
       const minByeCount = Math.min(...candidates.map(p => currentTournament.byeCounts[p] || 0));
       candidates = candidates.filter(p => (currentTournament.byeCounts[p] || 0) === minByeCount);
     }
 
-    // 3. それでも複数いる場合のみランダムに選ぶ
     let byePlayer;
     if (candidates.length === 1) {
       byePlayer = candidates[0];
@@ -540,9 +546,11 @@ function generateSwissMatches() {
     }
 
     pairs.push([byePlayer, null]);
-    
+
     // BYE回数を増加
     currentTournament.byeCounts[byePlayer]++;
+    // BYEプレイヤーには勝利数を1加算
+    currentTournament.winCounts[byePlayer]++;
   }
 
   // 6. マッチオブジェクトを生成
@@ -560,22 +568,17 @@ function generateSwissMatches() {
         approved: false
       });
     } else {
-      // FIX: 不戦勝マッチは自動的に승인状態で生成（二重加算防止）
-      // 不戦勝は対戦相手がいないため、生成時にapproved = true, approved = trueで設定
-      // winCounts は生成時のみ増加（승認時には再度増加させない）
       const byeMatch = {
         id: `${currentTournament.currentRound}-${matchNumber}`,
         round: currentTournament.currentRound,
         number: matchNumber,
         player1,
         player2: null,
-        winner: player1,  // 不戦勝なので winner を設定
-        approved: true,   // 불戦勝は自動승認（対戦相手がいないため）
-        isBye: true       // 不戦勝フラグ
+        winner: player1,
+        approved: true,
+        isBye: true
       };
       newMatches.push(byeMatch);
-      // 不戦勝時の勝利数加算（生成時のみ、승認時には追加加算しない）
-      currentTournament.winCounts[player1]++;
     }
     matchNumber++;
   });
@@ -713,6 +716,13 @@ function generateTournamentMatches(players, round) {
  * FIX #10: スイスドロー終了条件を勝利数最大でチェック
  */
 async function nextRound() {
+  if (currentTournament.format === 'swiss') {
+    console.log(
+      'Before nextRound',
+      JSON.stringify(currentTournament.winCounts)
+    );
+  }
+
   const currentMatches = currentTournament.matches.filter(m => m.round === currentTournament.currentRound);
   const allApproved = currentMatches.every(m => m.approved);
 
@@ -788,8 +798,15 @@ async function nextRound() {
     (currentTournament.winCounts[p] || 0) === maxWins
   );
 
-  if (topWinners.length === 1 && Object.keys(currentTournament.participants).length > 1) {
-    // 終了条件：勝利数最大のプレイヤーが1人
+  const hasSingleLeader = topWinners.length === 1;
+  const hasUnresolvedTie = topWinners.length > 1;
+
+  // 終了条件：
+  // 1. 最高勝利数を持つ者が1人だけである
+  // 2. かつ、その勝利数が0ではない
+  // 3. かつ、まだ全ラウンドを消化していないわけではない
+  // 仕様上は「1人だけ」ではなく、単独リーダーが確定した時点で終了する。
+  if (hasSingleLeader && maxWins > 0 && !hasUnresolvedTie) {
     alert(`大会終了！優勝者: ${topWinners[0]}`);
     currentTournament.status = 'finished';
 
@@ -820,6 +837,13 @@ async function nextRound() {
   renderTournamentInfo();
   renderMatches();
   renderRanking();
+
+  if (currentTournament.format === 'swiss') {
+    console.log(
+      'After nextRound',
+      JSON.stringify(currentTournament.winCounts)
+    );
+  }
 }
 
 async function finishTournament() {
