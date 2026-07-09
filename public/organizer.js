@@ -560,19 +560,21 @@ function generateSwissMatches() {
         approved: false
       });
     } else {
-      // FIX #5: 不戦勝時の勝利数加算は、生成時のみ（approveResult時には加算しない）
-      // 不戦勝フラグで判定できるようにする
-      newMatches.push({
+      // FIX: 不戦勝マッチは自動的に승인状態で生成（二重加算防止）
+      // 不戦勝は対戦相手がいないため、生成時にapproved = true, approved = trueで設定
+      // winCounts は生成時のみ増加（승認時には再度増加させない）
+      const byeMatch = {
         id: `${currentTournament.currentRound}-${matchNumber}`,
         round: currentTournament.currentRound,
         number: matchNumber,
         player1,
         player2: null,
-        winner: player1,
-        approved: true,
-        isBye: true // 不戦勝フラグを追加
-      });
-      // 不戦勝時の勝利数加算（ここでのみ実行）
+        winner: player1,  // 不戦勝なので winner を設定
+        approved: true,   // 불戦勝は自動승認（対戦相手がいないため）
+        isBye: true       // 不戦勝フラグ
+      };
+      newMatches.push(byeMatch);
+      // 不戦勝時の勝利数加算（生成時のみ、승認時には追加加算しない）
       currentTournament.winCounts[player1]++;
     }
     matchNumber++;
@@ -598,7 +600,7 @@ async function generateMatches() {
       const player2 = shuffled[i + 1] || null;
 
       if (!player2) {
-        // FIX #5: 不戦勝時の勝利数加算（生成時のみ）
+        // FIX #5修正: 不戦勝マッチも승인フローを通す（二重加算防止）
         newMatches.push({
           id: `${currentTournament.currentRound}-${matchNumber}`,
           round: currentTournament.currentRound,
@@ -606,10 +608,10 @@ async function generateMatches() {
           player1,
           player2: null,
           winner: player1,
-          approved: true,
+          approved: false,  // 승인フロー通す（approve時に winCounts 増加）
           isBye: true // 不戦勝フラグ
         });
-        currentTournament.winCounts[player1]++;
+        // 注：winCounts の増加は approveResult() で行う（二重加算防止）
       } else {
         // 通常マッチ
         newMatches.push({

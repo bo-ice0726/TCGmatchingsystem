@@ -232,39 +232,31 @@ function approveResult(matchId) {
   const match = currentTournament.matches.find(m => m.id === matchId);
   if (!match) return;
 
-  // FIX #5: 不戦勝の場合は承認フラグのみ設定（勝利数加算はマッチ生成時に済み）
-  if (match.isBye) {
-    match.approved = true;
-    
-    (async () => {
-      try {
-        await manager.updateTournament(currentTournament.id, {
-          matches: currentTournament.matches
-        });
-        currentTournament = await manager.getTournament(currentTournament.id);
-        renderStatus();
-        renderMatching();
-      } catch (error) {
-        alert('失敗しました: ' + error.message);
-      }
-    })();
+  // 既に승인された不戦勝マッチの場合は処理をスキップ（二重加算防止）
+  if (match.isBye && match.approved) {
+    // 既に승認済みの不戦勝マッチなので、再度処理しない
     return;
   }
 
-  // 通常マッチの結果承認
+  // 승认フラグを設定
   match.approved = true;
 
-  // FIX #4: 敗業数は approveResult時のみ加算（1回のみ）
-  if (!currentTournament.winCounts[match.winner]) {
-    currentTournament.winCounts[match.winner] = 0;
-  }
-  currentTournament.winCounts[match.winner]++;
+  // 勝者の勝利数を増加（通常マッチのみ、不戦勝は生成時に完了）
+  // 不戦勝マッチの場合は既に approved = true で生成されているため、ここでは加算しない
+  if (!match.isBye) {
+    // 通常マッチのみ勝利数を増加
+    if (!currentTournament.winCounts[match.winner]) {
+      currentTournament.winCounts[match.winner] = 0;
+    }
+    currentTournament.winCounts[match.winner]++;
 
-  const loser = match.player1 === match.winner ? match.player2 : match.player1;
-  if (!currentTournament.lossCounts[loser]) {
-    currentTournament.lossCounts[loser] = 0;
+    // FIX #4: 敗業数はapproveResult時のみ加算（1回のみ）
+    const loser = match.player1 === match.winner ? match.player2 : match.player1;
+    if (!currentTournament.lossCounts[loser]) {
+      currentTournament.lossCounts[loser] = 0;
+    }
+    currentTournament.lossCounts[loser]++;
   }
-  currentTournament.lossCounts[loser]++;
 
   (async () => {
     try {
