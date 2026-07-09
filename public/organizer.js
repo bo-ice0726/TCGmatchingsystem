@@ -453,11 +453,55 @@ function generateSwissMatches() {
     if (!(p in currentTournament.lossCounts)) {
       currentTournament.lossCounts[p] = 0;
     }
+    if (!currentTournament.byeCounts) {
+      currentTournament.byeCounts = {};
+    }
+    if (!(p in currentTournament.byeCounts)) {
+      currentTournament.byeCounts[p] = 0;
+    }
   });
+
+  // 0. 奇数人数時はBYE対象を先に決定
+  let swissPlayers = [...participants];
+  if (swissPlayers.length % 2 === 1) {
+    const byeCandidates = [...swissPlayers];
+
+    const minWins = Math.min(...byeCandidates.map(p => currentTournament.winCounts[p] || 0));
+    let candidates = byeCandidates.filter(p => (currentTournament.winCounts[p] || 0) === minWins);
+
+    if (candidates.length > 1) {
+      const minByeCount = Math.min(...candidates.map(p => currentTournament.byeCounts[p] || 0));
+      candidates = candidates.filter(p => (currentTournament.byeCounts[p] || 0) === minByeCount);
+    }
+
+    console.log('BYE Candidate pool', byeCandidates.map(p => ({
+      player: p,
+      wins: currentTournament.winCounts[p] || 0,
+      byeCount: currentTournament.byeCounts[p] || 0
+    })));
+    console.log('BYE initial candidates', candidates.map(p => ({
+      player: p,
+      wins: currentTournament.winCounts[p] || 0,
+      byeCount: currentTournament.byeCounts[p] || 0
+    })));
+
+    let byePlayer;
+    if (candidates.length === 1) {
+      byePlayer = candidates[0];
+    } else {
+      byePlayer = candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    console.log('Selected BYE', byePlayer);
+
+    swissPlayers = swissPlayers.filter(p => p !== byePlayer);
+    currentTournament.byeCounts[byePlayer]++;
+    currentTournament.winCounts[byePlayer] = (currentTournament.winCounts[byePlayer] || 0) + 1;
+  }
 
   // 1. プレイヤーを勝利数でグループ分け
   const groupedByWins = {};
-  participants.forEach(p => {
+  swissPlayers.forEach(p => {
     const wins = currentTournament.winCounts[p] || 0;
     if (!groupedByWins[wins]) {
       groupedByWins[wins] = [];
@@ -474,7 +518,7 @@ function generateSwissMatches() {
     .map(Number)
     .sort((a, b) => b - a); // 降順（勝利数が多い順）
 
-  const availablePlayers = new Set(participants);
+  const availablePlayers = new Set(swissPlayers);
   const pairs = [];
 
   // 3. マッチング処理（同勝利数帯を優先）
@@ -513,57 +557,6 @@ function generateSwissMatches() {
 
   // 4. 残った奇数人数と他グループのプレイヤーをマッチング
   let leftoverPlayers = Array.from(availablePlayers);
-
-  // 5. 不戦勝の処理（奇数の場合）
-  // ルール：勝利数最小 → BYE回数最小 → ランダム で選択
-  if (leftoverPlayers.length % 2 === 1) {
-    const byeCandidates = [...leftoverPlayers];
-
-    console.log('BYE Candidate pool', byeCandidates.map(p => ({
-      player: p,
-      wins: currentTournament.winCounts[p] || 0,
-      byeCount: currentTournament.byeCounts[p] || 0
-    })));
-
-    const minWins = Math.min(...byeCandidates.map(p => currentTournament.winCounts[p] || 0));
-    let candidates = byeCandidates.filter(p => (currentTournament.winCounts[p] || 0) === minWins);
-
-    console.log('BYE minWins', minWins, 'initial candidates', candidates.map(p => ({
-      player: p,
-      wins: currentTournament.winCounts[p] || 0,
-      byeCount: currentTournament.byeCounts[p] || 0
-    })));
-
-    if (candidates.length > 1) {
-      const minByeCount = Math.min(...candidates.map(p => currentTournament.byeCounts[p] || 0));
-      candidates = candidates.filter(p => (currentTournament.byeCounts[p] || 0) === minByeCount);
-      console.log('BYE minByeCount', minByeCount, 'filtered candidates', candidates.map(p => ({
-        player: p,
-        wins: currentTournament.winCounts[p] || 0,
-        byeCount: currentTournament.byeCounts[p] || 0
-      })));
-    }
-
-    console.log('BYE Candidates', candidates);
-
-    let byePlayer;
-    if (candidates.length === 1) {
-      byePlayer = candidates[0];
-    } else {
-      byePlayer = candidates[Math.floor(Math.random() * candidates.length)];
-    }
-
-    console.log('Selected BYE', byePlayer);
-
-    pairs.push([byePlayer, null]);
-
-    // BYE回数を増加
-    currentTournament.byeCounts[byePlayer]++;
-    // BYEプレイヤーには勝利数を1加算
-    currentTournament.winCounts[byePlayer]++;
-
-    leftoverPlayers = leftoverPlayers.filter(p => p !== byePlayer);
-  }
 
   leftoverPlayers.sort((a, b) => {
     return (currentTournament.winCounts[b] || 0)
