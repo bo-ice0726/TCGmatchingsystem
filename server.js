@@ -74,6 +74,7 @@ class TournamentManager {
       currentRound: 0,
       winCounts: {},
       lossCounts: {},
+      byeCounts: {}, // スイスドロー形式で、各プレイヤーが受けたBYE回数を追跡
       pairHistory: []
     };
 

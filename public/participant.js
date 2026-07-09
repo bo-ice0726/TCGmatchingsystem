@@ -153,7 +153,8 @@ function renderMatching() {
 
   matchActions.innerHTML = '';
 
-  if (!myMatch.player2) {
+  // FIX #5: isByeフラグで不戦勝判定
+  if (myMatch.isBye) {
     matchActions.innerHTML = '<p style="color: green; font-weight: bold;">不戦勝です！</p>';
   } else if (!myMatch.winner) {
     matchActions.innerHTML = `
@@ -167,9 +168,19 @@ function renderMatching() {
   }
 }
 
+/**
+ * 参加者が勝利を登録
+ * FIX #3: 二重登録防止
+ */
 function registerWin(matchId) {
   const match = currentTournament.matches.find(m => m.id === matchId);
   if (!match) return;
+
+  // FIX #3: 既に勝者が決定している場合は再登録不可
+  if (match.winner) {
+    alert('この試合は既に結果が登録されています');
+    return;
+  }
 
   match.winner = currentPlayer;
 
@@ -184,9 +195,19 @@ function registerWin(matchId) {
   })();
 }
 
+/**
+ * 参加者が敗北を登録
+ * FIX #3: 二重登録防止
+ */
 function registerLoss(matchId) {
   const match = currentTournament.matches.find(m => m.id === matchId);
   if (!match) return;
+
+  // FIX #3: 既に勝者が決定している場合は再登録不可
+  if (match.winner) {
+    alert('この試合は既に結果が登録されています');
+    return;
+  }
 
   const opponent = match.player1 === currentPlayer ? match.player2 : match.player1;
   match.winner = opponent;
@@ -202,12 +223,38 @@ function registerLoss(matchId) {
   })();
 }
 
+/**
+ * 試合結果を承認（敗者が承認）
+ * FIX #4: 敗業数加算は正確に1回のみ
+ * FIX #5: 不戦勝フラグをチェック（isBye）
+ */
 function approveResult(matchId) {
   const match = currentTournament.matches.find(m => m.id === matchId);
   if (!match) return;
 
+  // FIX #5: 不戦勝の場合は承認フラグのみ設定（勝利数加算はマッチ生成時に済み）
+  if (match.isBye) {
+    match.approved = true;
+    
+    (async () => {
+      try {
+        await manager.updateTournament(currentTournament.id, {
+          matches: currentTournament.matches
+        });
+        currentTournament = await manager.getTournament(currentTournament.id);
+        renderStatus();
+        renderMatching();
+      } catch (error) {
+        alert('失敗しました: ' + error.message);
+      }
+    })();
+    return;
+  }
+
+  // 通常マッチの結果承認
   match.approved = true;
 
+  // FIX #4: 敗業数は approveResult時のみ加算（1回のみ）
   if (!currentTournament.winCounts[match.winner]) {
     currentTournament.winCounts[match.winner] = 0;
   }

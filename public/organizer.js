@@ -1,6 +1,17 @@
 // 開催者画面ロジック
+
+/**
+ * Fisher-Yates Shuffleを使用した公平なシャッフル
+ * @param {Array} array - シャッフルする配列
+ * @returns {Array} - シャッフルされた配列（元の配列は変更しない）
+ */
 function shuffle(array) {
-  return array.sort(() => Math.random() - 0.5);
+  const result = [...array];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
 }
 
 function recordPairing(player1, player2) {
@@ -210,6 +221,7 @@ function getMatchStatus(match) {
 
 /**
  * マッチカードのHTMLを生成
+ * FIX #5: isByeフラグで不戦勝判定
  */
 function renderMatchCards(matches) {
   return matches.map((match) => {
@@ -242,7 +254,7 @@ function renderMatchCards(matches) {
           </div>
         ` : ''}
         
-        ${!match.player2 ? `
+        ${match.isBye ? `
           <div style="text-align: center; margin: 10px 0; padding: 8px; background: rgba(23, 162, 184, 0.1); border-radius: 4px;">
             <strong style="color: #17a2b8;">不戦勝</strong>
           </div>
@@ -330,25 +342,27 @@ function renderTournamentBracket() {
 }
 
 /**
- * 勝者を記録する関数
+ * 勝者を記録する関数（開催者が入力する場合）
+ * FIX #3: 勝敗二重登録防止
+ * FIX #4: 敗業数はここでは加算しない（approveResult時に加算）
  */
 function recordWinner(matchId, winner) {
   const match = currentTournament.matches.find(m => m.id === matchId);
   if (!match) return;
 
-  match.winner = winner;
-  const loser = match.player1 === winner ? match.player2 : match.player1;
-
-  // 敗北者の敗北数を増加
-  if (loser) {
-  currentTournament.lossCounts[loser]++;
+  // FIX #3: 既に勝者が決定している場合は再登録不可
+  if (match.winner) {
+    alert('この試合は既に結果が決定しています');
+    return;
   }
+
+  match.winner = winner;
+  // 敗業数の加算は approveResult() で行う
 
   (async () => {
     try {
       await manager.updateTournament(currentTournament.id, { 
-        matches: currentTournament.matches,
-        lossCounts: currentTournament.lossCounts
+        matches: currentTournament.matches
       });
       currentTournament = await manager.getTournament(currentTournament.id);
       renderMatches();
@@ -360,6 +374,10 @@ function recordWinner(matchId, winner) {
 }
 
 
+/**
+ * 大会を開始
+ * FIX #8: async化と非同期処理の完全整理
+ */
 function startTournament() {
   if (Object.keys(currentTournament.participants).length === 0) {
     alert('参加者がいません');
@@ -375,8 +393,11 @@ function startTournament() {
       await manager.startTournament(currentTournament.id);
       currentTournament = await manager.getTournament(currentTournament.id);
 
-      // 初期マッチング生成
-      generateMatches();
+      // 初期マッチング生成（awaitして完了を待つ）
+      await generateMatches();
+      
+      // 保存完了後に再度取得して画面更新
+      currentTournament = await manager.getTournament(currentTournament.id);
       renderTournamentInfo();
       renderMatches();
     } catch (error) {
@@ -398,10 +419,17 @@ function hasPaired(player1, player2) {
 
 /**
  * スイスドロー用のマッチング生成関数（勝利数ベース）
+ * 仕様：
+ * - 参加者を勝利数の多い順に並べる
+ * - 同勝利数帯を優先してペアリング
+ * - 各ラウンドで組番号を1から振り直す
+ * - 奇数人数の場合、最後の1人は不戦勝（勝利数+1）
  */
 function generateSwissMatches() {
   const participants = Object.keys(currentTournament.participants);
   
+  // FIX #1: newMatches初期化（未定義問題を解消）
+  const newMatches = [];
   let matchNumber = 1;
 
   // 初期化：敗北数がなければ0にセット
@@ -433,7 +461,7 @@ function generateSwissMatches() {
   const availablePlayers = new Set(participants);
   const pairs = [];
 
-  // 3. マッチング処理
+  // 3. マッチング処理（同勝利数帯を優先）
   for (const wins of winCounts) {
     const group = groupedByWins[wins].filter(p => availablePlayers.has(p));
 
@@ -451,13 +479,9 @@ function generateSwissMatches() {
         }
       }
 
-      // 同勝利数でペアが組めない場合は、勝利数が近いプレイヤーを探す
-      if (!player2) {
-        for (let i = 0; i < group.length; i++) {
-          player2 = group[i];
-          group.splice(i, 1);
-          break;
-        }
+      // 同勝利数でペアが組めない場合は、グループ内から任意に選択
+      if (!player2 && group.length > 0) {
+        player2 = group.shift();
       }
 
       if (player2) {
@@ -486,14 +510,45 @@ function generateSwissMatches() {
   }
 
   // 5. 不戦勝の処理（奇数の場合）
+  // ルール：勝利数最小 → BYE回数最小 → ランダム で選択
   if ((participants.length - pairs.length * 2) === 1) {
-    const byePlayer = Array.from(availablePlayers)[0];
+    const byePlayers = Array.from(availablePlayers);
+    
+    // 初期化：byeCountsがなければ0にセット
+    byePlayers.forEach(p => {
+      if (!(p in currentTournament.byeCounts)) {
+        currentTournament.byeCounts[p] = 0;
+      }
+    });
+
+    // 1. 勝利数が最も少ないプレイヤーをフィルタリング
+    const minWins = Math.min(...byePlayers.map(p => currentTournament.winCounts[p] || 0));
+    let candidates = byePlayers.filter(p => (currentTournament.winCounts[p] || 0) === minWins);
+
+    // 2. 候補が複数いる場合、過去BYE回数が最も少ないプレイヤーをフィルタリング
+    if (candidates.length > 1) {
+      const minByeCount = Math.min(...candidates.map(p => currentTournament.byeCounts[p] || 0));
+      candidates = candidates.filter(p => (currentTournament.byeCounts[p] || 0) === minByeCount);
+    }
+
+    // 3. それでも複数いる場合のみランダムに選ぶ
+    let byePlayer;
+    if (candidates.length === 1) {
+      byePlayer = candidates[0];
+    } else {
+      byePlayer = candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
     pairs.push([byePlayer, null]);
+    
+    // BYE回数を増加
+    currentTournament.byeCounts[byePlayer]++;
   }
 
   // 6. マッチオブジェクトを生成
   pairs.forEach(([player1, player2]) => {
     if (player2) {
+      // 通常マッチ
       recordPairing(player1, player2);
       newMatches.push({
         id: `${currentTournament.currentRound}-${matchNumber}`,
@@ -505,7 +560,8 @@ function generateSwissMatches() {
         approved: false
       });
     } else {
-      // 不戦勝
+      // FIX #5: 不戦勝時の勝利数加算は、生成時のみ（approveResult時には加算しない）
+      // 不戦勝フラグで判定できるようにする
       newMatches.push({
         id: `${currentTournament.currentRound}-${matchNumber}`,
         round: currentTournament.currentRound,
@@ -513,32 +569,23 @@ function generateSwissMatches() {
         player1,
         player2: null,
         winner: player1,
-        approved: true
+        approved: true,
+        isBye: true // 不戦勝フラグを追加
       });
+      // 不戦勝時の勝利数加算（ここでのみ実行）
       currentTournament.winCounts[player1]++;
     }
     matchNumber++;
   });
 
   currentTournament.matches = [...currentTournament.matches, ...newMatches];
-
-  (async () => {
-    try {
-      await manager.updateTournament(currentTournament.id, {
-        matches: currentTournament.matches,
-        winCounts: currentTournament.winCounts,
-        lossCounts: currentTournament.lossCounts
-      });
-    } catch (error) {
-      console.error('Failed to update matches:', error);
-    }
-  })();
 }
 
 /**
- * トーナメント形式と仗スイスドロー形式を判定してマッチング生成
+ * トーナメント形式と スイスドロー形式を判定してマッチング生成
+ * async化：保存完了後に画面更新
  */
-function generateMatches() {
+async function generateMatches() {
   // トーナメント形式の場合は既存ロジックを使用
   if (currentTournament.format === 'tournament') {
     const participants = Object.keys(currentTournament.participants);
@@ -550,22 +597,31 @@ function generateMatches() {
       const player1 = shuffled[i];
       const player2 = shuffled[i + 1] || null;
 
-      newMatches.push({
-        id: `${currentTournament.currentRound}-${matchNumber}`,
-        round: currentTournament.currentRound,
-        number: matchNumber,
-        player1,
-        player2,
-        winner: null,
-        approved: false
-      });
-
-      if (player2) {
-        recordPairing(player1, player2);
-      } else {
-        newMatches[matchNumber - 1].winner = player1;
-        newMatches[matchNumber - 1].approved = true;
+      if (!player2) {
+        // FIX #5: 不戦勝時の勝利数加算（生成時のみ）
+        newMatches.push({
+          id: `${currentTournament.currentRound}-${matchNumber}`,
+          round: currentTournament.currentRound,
+          number: matchNumber,
+          player1,
+          player2: null,
+          winner: player1,
+          approved: true,
+          isBye: true // 不戦勝フラグ
+        });
         currentTournament.winCounts[player1]++;
+      } else {
+        // 通常マッチ
+        newMatches.push({
+          id: `${currentTournament.currentRound}-${matchNumber}`,
+          round: currentTournament.currentRound,
+          number: matchNumber,
+          player1,
+          player2,
+          winner: null,
+          approved: false
+        });
+        recordPairing(player1, player2);
       }
 
       matchNumber++;
@@ -573,36 +629,43 @@ function generateMatches() {
 
     currentTournament.matches = [...currentTournament.matches, ...newMatches];
 
-    (async () => {
-      try {
-        await manager.updateTournament(currentTournament.id, {
-          matches: currentTournament.matches,
-          winCounts: currentTournament.winCounts
-        });
-      } catch (error) {
-        console.error('Failed to update matches:', error);
-      }
-    })();
+    // FIX #7: 保存を await（保存完了後に画面更新）
+    try {
+      await manager.updateTournament(currentTournament.id, {
+        matches: currentTournament.matches,
+        winCounts: currentTournament.winCounts
+      });
+    } catch (error) {
+      console.error('Failed to update matches:', error);
+    }
     return;
   }
 
   // スイスドロー形式の場合は改良版マッチング
   generateSwissMatches();
-}
-
-/**
- * トーナメント形式用：勝者リストを取得
- */
-function getWinners(matches) {
-  return matches.map(m => m.winner).filter(w => w);
+  
+  // FIX #7: 保存を await（保存完了後に画面更新）
+  try {
+    await manager.updateTournament(currentTournament.id, {
+      matches: currentTournament.matches,
+      winCounts: currentTournament.winCounts,
+      lossCounts: currentTournament.lossCounts,
+      byeCounts: currentTournament.byeCounts, // BYE回数を保存
+      pairHistory: currentTournament.pairHistory
+    });
+  } catch (error) {
+    console.error('Failed to update matches:', error);
+  }
 }
 
 /**
  * トーナメント形式用：勝者からマッチを生成
+ * FIX #9: 組番号を1から再採番（新ラウンドでリセット）
+ * FIX #5: 不戦勝フラグを使用
  */
 function generateTournamentMatches(players, round) {
   const matches = [];
-  let matchNumber = 1;
+  let matchNumber = 1; // 新ラウンドで組番号をリセット
 
   for (let i = 0; i < players.length; i += 2) {
     const player1 = players[i];
@@ -617,8 +680,10 @@ function generateTournamentMatches(players, round) {
         player1,
         player2: null,
         winner: player1,
-        approved: true
+        approved: true,
+        isBye: true // 不戦勝フラグ
       });
+      // 不戦勝時の勝利数加算（ここでのみ）
       currentTournament.winCounts[player1]++;
     } else {
       matches.push({
@@ -628,7 +693,8 @@ function generateTournamentMatches(players, round) {
         player1,
         player2,
         winner: null,
-        approved: false
+        approved: false,
+        isBye: false
       });
     }
 
@@ -638,7 +704,13 @@ function generateTournamentMatches(players, round) {
   return matches;
 }
 
-function nextRound() {
+/**
+ * 次ラウンドへ進む
+ * FIX #8: async化と非同期処理の完全整理
+ * FIX #9: トーナメント形式で勝者のみ抽出
+ * FIX #10: スイスドロー終了条件を勝利数最大でチェック
+ */
+async function nextRound() {
   const currentMatches = currentTournament.matches.filter(m => m.round === currentTournament.currentRound);
   const allApproved = currentMatches.every(m => m.approved);
 
@@ -647,40 +719,47 @@ function nextRound() {
     return;
   }
 
-  // トーナメント形式の場合：勝者のみを次ラウンドに進める
+  // ============================================
+  // トーナメント形式：勝者のみを次ラウンドに進める
+  // ============================================
   if (currentTournament.format === 'tournament') {
-    const winners = getWinners(currentMatches);
+    // FIX #9: 勝者のみを抽出
+    const winners = currentMatches.map(m => m.winner).filter(w => w);
 
     if (winners.length === 1) {
+      // 終了条件：勝者が1人
       alert(`大会終了！優勝者: ${winners[0]}`);
       currentTournament.status = 'finished';
 
-      (async () => {
+      try {
         await manager.updateTournament(currentTournament.id, {
           status: 'finished'
         });
-      })();
+        currentTournament = await manager.getTournament(currentTournament.id);
+      } catch (error) {
+        console.error('Failed to finish tournament:', error);
+      }
 
       renderTournamentInfo();
       renderRanking();
       return;
     }
 
+    // 次ラウンドを生成
     currentTournament.currentRound += 1;
     const newMatches = generateTournamentMatches(winners, currentTournament.currentRound);
     currentTournament.matches.push(...newMatches);
 
-    (async () => {
-      try {
-        await manager.updateTournament(currentTournament.id, {
-          matches: currentTournament.matches,
-          winCounts: currentTournament.winCounts,
-          currentRound: currentTournament.currentRound
-        });
-      } catch (error) {
-        console.error('Failed to update tournament:', error);
-      }
-    })();
+    try {
+      await manager.updateTournament(currentTournament.id, {
+        matches: currentTournament.matches,
+        winCounts: currentTournament.winCounts,
+        currentRound: currentTournament.currentRound
+      });
+      currentTournament = await manager.getTournament(currentTournament.id);
+    } catch (error) {
+      console.error('Failed to update tournament:', error);
+    }
 
     renderTournamentInfo();
     renderMatches();
@@ -688,23 +767,38 @@ function nextRound() {
     return;
   }
 
-  // スイスドロー形式の場合：全参加者で再マッチング（既存ロジック）
-  // 追加：全勝者チェック
-  const undefeated = Object.keys(currentTournament.participants).filter(p => {
-    return (currentTournament.lossCounts[p] || 0) === 0;
-  });
+  // ============================================
+  // スイスドロー形式：全参加者で再マッチング
+  // ============================================
 
-  if (undefeated.length === 1 && Object.keys(currentTournament.participants).length > 1) {
-    // 終了処理
-    alert(`大会終了！優勝者: ${undefeated[0]}`);
+  // FIX #10: スイスドロー終了条件を勝利数最大でチェック
+  // 勝利数最大のプレイヤーを取得
+  let maxWins = 0;
+  for (const player of Object.keys(currentTournament.participants)) {
+    const wins = currentTournament.winCounts[player] || 0;
+    if (wins > maxWins) {
+      maxWins = wins;
+    }
+  }
 
+  // 勝利数最大のプレイヤー数をカウント
+  const topWinners = Object.keys(currentTournament.participants).filter(p => 
+    (currentTournament.winCounts[p] || 0) === maxWins
+  );
+
+  if (topWinners.length === 1 && Object.keys(currentTournament.participants).length > 1) {
+    // 終了条件：勝利数最大のプレイヤーが1人
+    alert(`大会終了！優勝者: ${topWinners[0]}`);
     currentTournament.status = 'finished';
 
-    (async () => {
+    try {
       await manager.updateTournament(currentTournament.id, {
         status: 'finished'
       });
-    })();
+      currentTournament = await manager.getTournament(currentTournament.id);
+    } catch (error) {
+      console.error('Failed to finish tournament:', error);
+    }
 
     renderTournamentInfo();
     renderRanking();
@@ -713,13 +807,13 @@ function nextRound() {
 
   // 通常の次ラウンド
   currentTournament.currentRound += 1;
-  generateMatches();
+  await generateMatches();
 
-  (async () => {
-    await manager.updateTournament(currentTournament.id, {
-      currentRound: currentTournament.currentRound
-    });
-  })();
+  try {
+    currentTournament = await manager.getTournament(currentTournament.id);
+  } catch (error) {
+    console.error('Failed to get updated tournament:', error);
+  }
 
   renderTournamentInfo();
   renderMatches();
