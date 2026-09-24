@@ -435,176 +435,91 @@ function hasPaired(player1, player2) {
 /**
  * スイスドロー用のマッチング生成関数（勝利数ベース）
  * 仕様：
- * - 参加者を勝利数の多い順に並べる
- * - 同勝利数帯を優先してペアリング
- * - 各ラウンドで組番号を1から振り直す
- * - 奇数人数の場合、最後の1人は不戦勝（勝利数+1）
+ * - 1戦目：ランダムに2人ずつ組む
+ * - 2戦目以降：勝利数の高い順に並べて上から2人ずつ組む（同勝利数内はランダム）
+ * - 組番号は各ラウンド1から振り直す（勝利数の高い組から）
+ * - 奇数人数の場合、端数の1人に最後の組番号を振り、不戦勝として勝利数+1
  */
 function generateSwissMatches() {
   ensureSwissState();
 
+  const round = currentTournament.currentRound;
+  const wins = p => currentTournament.winCounts[p] || 0;
   const participants = Object.keys(currentTournament.participants);
-  
+
+  participants.forEach(p => {
+    if (!(p in currentTournament.winCounts)) currentTournament.winCounts[p] = 0;
+    if (!(p in currentTournament.lossCounts)) currentTournament.lossCounts[p] = 0;
+  });
+
+  // 1戦目はランダム、2戦目以降は勝利数の高い順（同勝利数内はシャッフル）
+  let players = shuffle(participants);
+  if (round > 1) {
+    players.sort((a, b) => wins(b) - wins(a)); // 安定ソートなので同勝利数内はランダム順のまま
+  }
+
+  // 端数（不戦勝）の決定：並びの最後の人。
+  // 2戦目以降は最下位の勝利数の中で不戦勝回数が最も少ない人を最後に回す。
+  let byePlayer = null;
+  if (players.length % 2 === 1) {
+    if (round > 1) {
+      const minWins = wins(players[players.length - 1]);
+      const lowest = players.filter(p => wins(p) === minWins);
+      const minBye = Math.min(...lowest.map(p => currentTournament.byeCounts[p] || 0));
+      byePlayer = lowest.find(p => (currentTournament.byeCounts[p] || 0) === minBye);
+    } else {
+      byePlayer = players[players.length - 1];
+    }
+    players = players.filter(p => p !== byePlayer);
+  }
+
+  // 上から順に2人ずつ組む（可能なら再戦を避け、近い順位の未対戦相手を選ぶ）
+  const pairs = [];
+  const remaining = [...players];
+  while (remaining.length >= 2) {
+    const player1 = remaining.shift();
+    let idx = remaining.findIndex(p => !hasPaired(player1, p));
+    if (idx < 0) idx = 0;
+    const player2 = remaining.splice(idx, 1)[0];
+    pairs.push([player1, player2]);
+  }
+
   const newMatches = [];
   let matchNumber = 1;
 
-  // 初期化：敗北数がなければ0にセット
-  participants.forEach(p => {
-    if (!(p in currentTournament.lossCounts)) {
-      currentTournament.lossCounts[p] = 0;
-    }
-    if (!currentTournament.byeCounts) {
-      currentTournament.byeCounts = {};
-    }
-    if (!(p in currentTournament.byeCounts)) {
-      currentTournament.byeCounts[p] = 0;
-    }
-  });
-
-  // 0. 奇数人数時はBYE対象を先に決定
-  let swissPlayers = [...participants];
-  if (swissPlayers.length % 2 === 1) {
-    const byeCandidates = [...swissPlayers];
-
-    const minWins = Math.min(...byeCandidates.map(p => currentTournament.winCounts[p] || 0));
-    let candidates = byeCandidates.filter(p => (currentTournament.winCounts[p] || 0) === minWins);
-
-    if (candidates.length > 1) {
-      const minByeCount = Math.min(...candidates.map(p => currentTournament.byeCounts[p] || 0));
-      candidates = candidates.filter(p => (currentTournament.byeCounts[p] || 0) === minByeCount);
-    }
-
-    console.log('BYE Candidate pool', byeCandidates.map(p => ({
-      player: p,
-      wins: currentTournament.winCounts[p] || 0,
-      byeCount: currentTournament.byeCounts[p] || 0
-    })));
-    console.log('BYE initial candidates', candidates.map(p => ({
-      player: p,
-      wins: currentTournament.winCounts[p] || 0,
-      byeCount: currentTournament.byeCounts[p] || 0
-    })));
-
-    let byePlayer;
-    if (candidates.length === 1) {
-      byePlayer = candidates[0];
-    } else {
-      byePlayer = candidates[Math.floor(Math.random() * candidates.length)];
-    }
-
-    console.log('Selected BYE', byePlayer);
-
-    swissPlayers = swissPlayers.filter(p => p !== byePlayer);
-    currentTournament.byeCounts[byePlayer]++;
-    currentTournament.winCounts[byePlayer] = (currentTournament.winCounts[byePlayer] || 0) + 1;
-  }
-
-  // 1. プレイヤーを勝利数でグループ分け
-  const groupedByWins = {};
-  swissPlayers.forEach(p => {
-    const wins = currentTournament.winCounts[p] || 0;
-    if (!groupedByWins[wins]) {
-      groupedByWins[wins] = [];
-    }
-    groupedByWins[wins].push(p);
-  });
-
-  // 2. 各グループをshuffleしてランダム化
-  Object.keys(groupedByWins).forEach(wins => {
-    groupedByWins[wins] = shuffle([...groupedByWins[wins]]);
-  });
-
-  const winCounts = Object.keys(groupedByWins)
-    .map(Number)
-    .sort((a, b) => b - a); // 降順（勝利数が多い順）
-
-  const availablePlayers = new Set(swissPlayers);
-  const pairs = [];
-
-  // 3. マッチング処理（同勝利数帯を優先）
-  for (const wins of winCounts) {
-    const group = groupedByWins[wins].filter(p => availablePlayers.has(p));
-
-    while (group.length >= 2) {
-      const player1 = group.shift();
-      availablePlayers.delete(player1);
-
-      // 同じ勝利数グループ内から対戦相手を探す
-      let player2 = null;
-      for (let i = 0; i < group.length; i++) {
-        if (!hasPaired(player1, group[i])) {
-          player2 = group[i];
-          group.splice(i, 1);
-          break;
-        }
-      }
-
-      // 同勝利数でペアが組めない場合は、グループ内から任意に選択
-      if (!player2 && group.length > 0) {
-        player2 = group.shift();
-      }
-
-      if (player2) {
-        availablePlayers.delete(player2);
-        pairs.push([player1, player2]);
-      } else {
-        // ペアが組めない場合は戻す
-        group.unshift(player1);
-        availablePlayers.add(player1);
-      }
-    }
-  }
-
-  // 4. 残った奇数人数と他グループのプレイヤーをマッチング
-  let leftoverPlayers = Array.from(availablePlayers);
-
-  leftoverPlayers.sort((a, b) => {
-    return (currentTournament.winCounts[b] || 0)
-        - (currentTournament.winCounts[a] || 0);
-  });
-
-  // 他グループとのマッチング
-  for (let i = 0; i < leftoverPlayers.length - 1; i += 2) {
-    pairs.push([leftoverPlayers[i], leftoverPlayers[i + 1]]);
-  }
-
-  // 6. マッチオブジェクトを生成
   pairs.forEach(([player1, player2]) => {
-    if (player2) {
-      // 通常マッチ
-      recordPairing(player1, player2);
-      newMatches.push({
-        id: `${currentTournament.currentRound}-${matchNumber}`,
-        round: currentTournament.currentRound,
-        number: matchNumber,
-        player1,
-        player2,
-        winner: null,
-        approved: false
-      });
-    } else {
-      const byeMatch = {
-        id: `${currentTournament.currentRound}-${matchNumber}`,
-        round: currentTournament.currentRound,
-        number: matchNumber,
-        player1,
-        player2: null,
-        winner: player1,
-        approved: true,
-        isBye: true
-      };
-      newMatches.push(byeMatch);
-    }
+    recordPairing(player1, player2);
+    newMatches.push({
+      id: `${round}-${matchNumber}`,
+      round,
+      number: matchNumber,
+      player1,
+      player2,
+      winner: null,
+      approved: false
+    });
     matchNumber++;
   });
+
+  if (byePlayer) {
+    // 不戦勝：生成時に勝利数+1（承認済みで生成するので approveResult では加算されない）
+    currentTournament.winCounts[byePlayer] = wins(byePlayer) + 1;
+    currentTournament.byeCounts[byePlayer] = (currentTournament.byeCounts[byePlayer] || 0) + 1;
+    newMatches.push({
+      id: `${round}-${matchNumber}`,
+      round,
+      number: matchNumber,
+      player1: byePlayer,
+      player2: null,
+      winner: byePlayer,
+      approved: true,
+      isBye: true
+    });
+  }
 
   currentTournament.matches = [...currentTournament.matches, ...newMatches];
 }
 
-/**
- * トーナメント形式と スイスドロー形式を判定してマッチング生成
- * async化：保存完了後に画面更新
- */
 async function generateMatches() {
   // トーナメント形式の場合は既存ロジックを使用
   if (currentTournament.format === 'tournament') {
@@ -671,7 +586,8 @@ async function generateMatches() {
       winCounts: currentTournament.winCounts,
       lossCounts: currentTournament.lossCounts,
       byeCounts: currentTournament.byeCounts, // BYE回数を保存
-      pairHistory: currentTournament.pairHistory
+      pairHistory: currentTournament.pairHistory,
+      currentRound: currentTournament.currentRound // 保存しないと再取得時に前ラウンドへ戻る
     });
   } catch (error) {
     console.error('Failed to update matches:', error);
@@ -813,15 +729,8 @@ async function nextRound() {
     (currentTournament.winCounts[p] || 0) === maxWins
   );
 
-  const hasSingleLeader = topWinners.length === 1;
-  const hasUnresolvedTie = topWinners.length > 1;
-
-  // 終了条件：
-  // 1. 最高勝利数を持つ者が1人だけである
-  // 2. かつ、その勝利数が0ではない
-  // 3. かつ、まだ全ラウンドを消化していないわけではない
-  // 仕様上は「1人だけ」ではなく、単独リーダーが確定した時点で終了する。
-  if (hasSingleLeader && maxWins > 0 && !hasUnresolvedTie) {
+  // 終了条件：勝利数が最も高い人が1人になった時点で終了
+  if (topWinners.length === 1 && maxWins > 0) {
     alert(`大会終了！優勝者: ${topWinners[0]}`);
     currentTournament.status = 'finished';
 
