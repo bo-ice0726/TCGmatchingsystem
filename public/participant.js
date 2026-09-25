@@ -171,7 +171,7 @@ function renderMatching() {
       <div class="match-number">第${myMatch.number}試合</div>
       <div class="opponent">対戦相手: <strong>${opponent || '(不戦勝)'}</strong></div>
       <div style="margin-top: 15px; font-size: 16px;">
-        ${!myMatch.winner ? `<strong>未決定</strong>` : (isWinner ? `<strong style="color: green;">あなたが勝ちました</strong>` : `<strong style="color: red;">あなたが負けました</strong>`)}
+        ${myMatch.bothLoss ? `<strong style="color: red;">両者敗北</strong>` : !myMatch.winner ? `<strong>未決定</strong>` : (isWinner ? `<strong style="color: green;">あなたが勝ちました</strong>` : `<strong style="color: red;">あなたが負けました</strong>`)}
         ${myMatch.approved ? '<br/>✓ 結果が確定しました' : (myMatch.winner ? '<br/>⏳ 相手の承認を待機中' : '')}
       </div>
     </div>
@@ -182,7 +182,7 @@ function renderMatching() {
   // FIX #5: isByeフラグで不戦勝判定
   if (myMatch.isBye) {
     matchActions.innerHTML = '<p style="color: green; font-weight: bold;">不戦勝です！</p>';
-  } else if (!myMatch.winner) {
+  } else if (!myMatch.winner && !myMatch.approved) {
     matchActions.innerHTML = `
       <button onclick="registerWin('${myMatch.id}')" class="btn-action" style="background: green;">勝利を登録</button>
       <p style="color: #666; font-size: 14px;">勝った方が「勝利を登録」を押してください。負けた方は登録後に結果を承認します。</p>
@@ -207,7 +207,7 @@ function registerWin(matchId) {
       if (!match) return;
 
       // FIX #3: 既に勝者が決定している場合は再登録不可
-      if (match.winner) {
+      if (match.winner || match.approved) {
         alert('この試合は既に結果が登録されています');
         renderStatus();
         renderMatching();

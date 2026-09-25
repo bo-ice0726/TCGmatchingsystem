@@ -223,6 +223,9 @@ function renderMatches() {
  * マッチの状態を判定（"pending" | "win" | "loss" | "approved"）
  */
 function getMatchStatus(match) {
+  if (match.bothLoss) {
+    return 'approved';
+  }
   if (!match.winner) {
     return 'pending';
   }
@@ -270,7 +273,13 @@ function renderMatchCards(matches) {
             <strong style="color: #28a745;">勝者: ${match.winner}</strong>
           </div>
         ` : ''}
-        
+
+        ${match.bothLoss ? `
+          <div style="text-align: center; margin: 10px 0; padding: 8px; background: rgba(220, 53, 69, 0.1); border-radius: 4px;">
+            <strong style="color: #dc3545;">両者敗北</strong>
+          </div>
+        ` : ''}
+
         ${match.isBye ? `
           <div style="text-align: center; margin: 10px 0; padding: 8px; background: rgba(23, 162, 184, 0.1); border-radius: 4px;">
             <strong style="color: #17a2b8;">不戦勝</strong>
@@ -280,11 +289,16 @@ function renderMatchCards(matches) {
         <div class="match-actions">
           ${match.player2 && currentTournament.status !== 'finished' ? `
             <button class="btn-winner" onclick="recordWinner('${match.id}', '${match.player1}')" ${match.approved && match.winner === match.player1 ? 'disabled' : ''}>
-              ${match.player1} が勝利${match.winner ? '（修正）' : ''}
+              ${match.player1} が勝利${match.winner || match.bothLoss ? '（修正）' : ''}
             </button>
             <button class="btn-winner" onclick="recordWinner('${match.id}', '${match.player2}')" ${match.approved && match.winner === match.player2 ? 'disabled' : ''}>
-              ${match.player2} が勝利${match.winner ? '（修正）' : ''}
+              ${match.player2} が勝利${match.winner || match.bothLoss ? '（修正）' : ''}
             </button>
+            ${currentTournament.format === 'swiss' ? `
+              <button class="btn-winner" style="background: #dc3545;" onclick="recordBothLoss('${match.id}')" ${match.bothLoss ? 'disabled' : ''}>
+                両者敗北${match.winner ? '（修正）' : ''}
+              </button>
+            ` : ''}
           ` : ''}
           ${match.winner && !match.approved ? `
             <div style="width: 100%; text-align: center; color: #6c757d; font-size: 13px;">⏳ 敗者の承認待ち（開催者が登録すると即確定します）</div>
@@ -426,12 +440,29 @@ function renderTournamentBracket() {
  * 開催者の登録は参加者の承認なしで即確定する。登録済みの結果の修正にも使う。
  */
 function recordWinner(matchId, winner) {
+  setMatchResult(matchId, winner, `${winner} の勝利`);
+}
+
+/**
+ * 両者敗北を記録する関数（スイスドロー形式のみ、開催者が入力する場合）
+ * 両者の敗北数を加算し、勝利数はどちらにも加算しない。
+ */
+function recordBothLoss(matchId) {
+  if (currentTournament.format !== 'swiss') return;
+  setMatchResult(matchId, null, '両者敗北');
+}
+
+/**
+ * 開催者による試合結果の確定（winner が null なら両者敗北）
+ */
+function setMatchResult(matchId, winner, label) {
   const match = currentTournament.matches.find(m => m.id === matchId);
   if (!match || match.isBye) return;
 
-  if (match.approved && match.winner === winner) return;
+  const bothLoss = winner === null;
+  if (match.approved && match.winner === winner && !!match.bothLoss === bothLoss) return;
 
-  if (match.winner && !confirm(`この試合の結果を「${winner} の勝利」に修正して確定しますか？`)) {
+  if ((match.winner || match.bothLoss) && !confirm(`この試合の結果を「${label}」に修正して確定しますか？`)) {
     return;
   }
 
@@ -439,17 +470,23 @@ function recordWinner(matchId, winner) {
   const addCount = (counts, player, delta) => {
     counts[player] = Math.max(0, (counts[player] || 0) + delta);
   };
+  const applyResult = delta => {
+    if (match.bothLoss) {
+      addCount(currentTournament.lossCounts, match.player1, delta);
+      addCount(currentTournament.lossCounts, match.player2, delta);
+    } else if (match.winner) {
+      addCount(currentTournament.winCounts, match.winner, delta);
+      addCount(currentTournament.lossCounts, loserOf(match.winner), delta);
+    }
+  };
 
   // 確定済みの結果を修正する場合は、以前の勝敗数を取り消す
-  if (match.approved && match.winner) {
-    addCount(currentTournament.winCounts, match.winner, -1);
-    addCount(currentTournament.lossCounts, loserOf(match.winner), -1);
-  }
+  if (match.approved) applyResult(-1);
 
   match.winner = winner;
+  match.bothLoss = bothLoss;
   match.approved = true;
-  addCount(currentTournament.winCounts, winner, 1);
-  addCount(currentTournament.lossCounts, loserOf(winner), 1);
+  applyResult(1);
 
   (async () => {
     try {
