@@ -525,42 +525,9 @@ async function generateMatches() {
   if (currentTournament.format === 'tournament') {
     const participants = Object.keys(currentTournament.participants);
     const shuffled = shuffle([...participants]);
-    const newMatches = [];
-    let matchNumber = 1;
-
-    for (let i = 0; i < shuffled.length; i += 2) {
-      const player1 = shuffled[i];
-      const player2 = shuffled[i + 1] || null;
-
-      if (!player2) {
-        // FIX #5修正: 不戦勝マッチも승인フローを通す（二重加算防止）
-        newMatches.push({
-          id: `${currentTournament.currentRound}-${matchNumber}`,
-          round: currentTournament.currentRound,
-          number: matchNumber,
-          player1,
-          player2: null,
-          winner: player1,
-          approved: false,  // 승인フロー通す（approve時に winCounts 増加）
-          isBye: true // 不戦勝フラグ
-        });
-        // 注：winCounts の増加は approveResult() で行う（二重加算防止）
-      } else {
-        // 通常マッチ
-        newMatches.push({
-          id: `${currentTournament.currentRound}-${matchNumber}`,
-          round: currentTournament.currentRound,
-          number: matchNumber,
-          player1,
-          player2,
-          winner: null,
-          approved: false
-        });
-        recordPairing(player1, player2);
-      }
-
-      matchNumber++;
-    }
+    // 不戦勝は承認済みで生成し、勝利数もここで加算する（存在しない相手の承認待ちにしない）
+    const newMatches = generateTournamentMatches(shuffled, currentTournament.currentRound);
+    newMatches.forEach(m => recordPairing(m.player1, m.player2));
 
     currentTournament.matches = [...currentTournament.matches, ...newMatches];
 
@@ -620,7 +587,7 @@ function generateTournamentMatches(players, round) {
         isBye: true // 不戦勝フラグ
       });
       // 不戦勝時の勝利数加算（ここでのみ）
-      currentTournament.winCounts[player1]++;
+      currentTournament.winCounts[player1] = (currentTournament.winCounts[player1] || 0) + 1;
     } else {
       matches.push({
         id: `${round}-${matchNumber}`,
