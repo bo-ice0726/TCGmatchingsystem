@@ -119,7 +119,9 @@ function renderTournamentInfo() {
     currentTournament.status === 'waiting' ? 'block' : 'none';
   document.getElementById('nextRoundBtn').style.display = 
     currentTournament.status === 'started' && currentTournament.currentRound > 0 ? 'block' : 'none';
-  document.getElementById('finishBtn').style.display = 
+  document.getElementById('finishBtn').style.display =
+    currentTournament.status === 'finished' ? 'block' : 'none';
+  document.getElementById('downloadResultBtn').style.display =
     currentTournament.status === 'finished' ? 'block' : 'none';
 }
 

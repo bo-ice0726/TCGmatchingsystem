@@ -117,6 +117,8 @@ function renderStatus() {
 
   document.getElementById('winCount').textContent = currentTournament.winCounts[currentPlayer] || 0;
   document.getElementById('lossCount').textContent = currentTournament.lossCounts[currentPlayer] || 0;
+  document.getElementById('downloadResultBtn').style.display =
+    currentTournament.status === 'finished' ? 'block' : 'none';
 }
 
 function renderMatching() {
