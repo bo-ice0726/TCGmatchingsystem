@@ -302,17 +302,19 @@ function renderMatchCards(matches) {
 
 /**
  * トーナメント表を生成（ブラケット表示）
+ * 1回戦の枠数から全ラウンド（決勝まで）を描画し、未生成のラウンドは空き枠で表示する。
+ * 未生成ラウンドの枠には、前ラウンドの隣り合う2試合で確定した勝者を表示する。
  */
 function renderTournamentBracket() {
   const bracketContainer = document.getElementById('bracketContainer');
   const bracket = document.getElementById('bracket');
-  
+
   if (currentTournament.format !== 'tournament') {
     bracketContainer.classList.remove('show');
     return;
   }
 
-  // ラウンドごとにグループ化
+  // ラウンドごとにグループ化（組番号順）
   const rounds = {};
   currentTournament.matches.forEach(match => {
     if (!rounds[match.round]) {
@@ -320,37 +322,105 @@ function renderTournamentBracket() {
     }
     rounds[match.round].push(match);
   });
+  Object.values(rounds).forEach(list => list.sort((a, b) => a.number - b.number));
 
-  // ブラケットのHTML生成
-  let bracketHTML = '';
-  const sortedRounds = Object.keys(rounds).sort((a, b) => parseInt(a) - parseInt(b));
+  const firstRound = rounds[1] || [];
+  if (firstRound.length === 0) {
+    bracketContainer.classList.remove('show');
+    return;
+  }
 
-  sortedRounds.forEach(roundNum => {
-    const roundMatches = rounds[roundNum];
-    const roundLabel = roundNum === '1' ? '1回戦' : (roundNum === '2' ? '準決勝' : (roundNum === '3' ? '決勝' : `ラウンド${roundNum}`));
-    
-    bracketHTML += `
-      <div class="bracket-round">
-        <div class="bracket-round-title">${roundLabel}</div>
-    `;
+  // 1回戦の試合数から総ラウンド数を算出（例：4試合 → 8枠 → 3ラウンド）
+  const generatedRounds = Math.max(...Object.keys(rounds).map(Number));
+  const totalRounds = Math.max(Math.ceil(Math.log2(firstRound.length * 2)), generatedRounds);
 
-    roundMatches.forEach(match => {
-      const isWinner = match.winner && !match.approved ? 'winner' : '';
-      const isEmpty = !match.player2 && !match.winner ? 'empty' : '';
-      
-      bracketHTML += `
-        <div class="bracket-match ${isWinner} ${isEmpty}">
-          <div class="bracket-match-text">
-            ${match.winner ? `<strong>${match.winner}</strong>` : 
-              (match.player2 ? `${match.player1} vs ${match.player2}` : 
-               `${match.player1} (不戦勝)`)}
-          </div>
+  const roundLabel = round => (round === totalRounds ? '決勝' : `${round}回戦`);
+
+  const playerRow = (name, match) => {
+    if (!name) return '<div class="bracket-player tbd">未定</div>';
+    let cls = '';
+    if (match && match.approved && match.winner) {
+      cls = match.winner === name ? 'won' : 'lost';
+    }
+    return `<div class="bracket-player ${cls}">${name}</div>`;
+  };
+
+  const matchBox = match => {
+    if (match.isBye) {
+      return `
+        <div class="bracket-match bye done">
+          ${playerRow(match.player1, match)}
+          <div class="bracket-player bye-slot">不戦勝</div>
         </div>
       `;
-    });
+    }
 
-    bracketHTML += `</div>`;
-  });
+    let status = '対戦中';
+    if (match.approved) status = '✓ 確定';
+    else if (match.winner) status = '⏳ 承認待ち';
+
+    return `
+      <div class="bracket-match ${match.approved ? 'done' : ''}">
+        ${playerRow(match.player1, match)}
+        ${playerRow(match.player2, match)}
+        <div class="bracket-match-status">${status}</div>
+      </div>
+    `;
+  };
+
+  // 前ラウンドの試合から確定した勝者を取得（未生成ラウンドの枠表示用）
+  const advancedFrom = match => (match && match.approved ? match.winner : null);
+
+  let bracketHTML = '';
+  let prevSlots = firstRound; // 前ラウンドの枠（試合 or 予定枠）
+
+  for (let round = 1; round <= totalRounds; round++) {
+    const actual = rounds[round];
+    let slots;
+
+    if (actual) {
+      slots = actual;
+    } else {
+      slots = [];
+      for (let i = 0; i < prevSlots.length; i += 2) {
+        slots.push({
+          placeholder: true,
+          player1: advancedFrom(prevSlots[i]),
+          player2: advancedFrom(prevSlots[i + 1])
+        });
+      }
+    }
+
+    bracketHTML += `
+      <div class="bracket-round">
+        <div class="bracket-round-title">${roundLabel(round)}</div>
+        <div class="bracket-round-matches">
+          ${slots.map(slot => slot.placeholder ? `
+            <div class="bracket-match empty">
+              ${playerRow(slot.player1)}
+              ${playerRow(slot.player2)}
+            </div>
+          ` : matchBox(slot)).join('')}
+        </div>
+      </div>
+    `;
+
+    prevSlots = slots;
+  }
+
+  // 優勝者
+  const finalMatch = (rounds[totalRounds] || [])[0];
+  const champion = advancedFrom(finalMatch);
+  bracketHTML += `
+    <div class="bracket-round">
+      <div class="bracket-round-title">優勝</div>
+      <div class="bracket-round-matches">
+        <div class="bracket-match ${champion ? 'winner' : 'empty'}">
+          ${champion ? `🏆 ${champion}` : '<div class="bracket-player tbd">未定</div>'}
+        </div>
+      </div>
+    </div>
+  `;
 
   bracket.innerHTML = bracketHTML;
   bracketContainer.classList.add('show');
@@ -525,8 +595,7 @@ async function generateMatches() {
   if (currentTournament.format === 'tournament') {
     const participants = Object.keys(currentTournament.participants);
     const shuffled = shuffle([...participants]);
-    // 不戦勝は承認済みで生成し、勝利数もここで加算する（存在しない相手の承認待ちにしない）
-    const newMatches = generateTournamentMatches(shuffled, currentTournament.currentRound);
+    const newMatches = generateFirstTournamentRound(shuffled, currentTournament.currentRound);
     newMatches.forEach(m => recordPairing(m.player1, m.player2));
 
     currentTournament.matches = [...currentTournament.matches, ...newMatches];
@@ -562,7 +631,69 @@ async function generateMatches() {
 }
 
 /**
- * トーナメント形式用：勝者からマッチを生成
+ * トーナメント形式用：1回戦のマッチを生成
+ * 一般的なトーナメント表と同様に、不戦勝はすべて1回戦に割り当てる。
+ * 参加人数以上の最小の2の累乗を枠数とし、空き枠の数だけ不戦勝を作ることで
+ * 2回戦以降の人数が必ず2の累乗（2, 4, 8, 16...）になり、以降は不戦勝が発生しない。
+ * 不戦勝は承認済みで生成し、勝利数もここで加算する（存在しない相手の承認待ちにしない）
+ */
+function generateFirstTournamentRound(players, round) {
+  let bracketSize = 2;
+  while (bracketSize < players.length) bracketSize *= 2;
+
+  const matchCount = bracketSize / 2;
+  const byeCount = bracketSize - players.length;
+
+  // 不戦勝の位置をトーナメント表全体に散らす（ビット反転順：0, 半分, 1/4, 3/4 ...）
+  const bits = Math.log2(matchCount);
+  const spreadOrder = [...Array(matchCount).keys()].map(i => {
+    let r = 0;
+    for (let b = 0; b < bits; b++) {
+      if (i & (1 << b)) r |= 1 << (bits - 1 - b);
+    }
+    return r;
+  });
+  const byePositions = new Set(spreadOrder.slice(0, byeCount));
+
+  const matches = [];
+  const queue = [...players];
+
+  for (let i = 0; i < matchCount; i++) {
+    const matchNumber = i + 1;
+    const player1 = queue.shift();
+
+    if (byePositions.has(i)) {
+      matches.push({
+        id: `${round}-${matchNumber}`,
+        round,
+        number: matchNumber,
+        player1,
+        player2: null,
+        winner: player1,
+        approved: true,
+        isBye: true
+      });
+      currentTournament.winCounts[player1] = (currentTournament.winCounts[player1] || 0) + 1;
+    } else {
+      matches.push({
+        id: `${round}-${matchNumber}`,
+        round,
+        number: matchNumber,
+        player1,
+        player2: queue.shift(),
+        winner: null,
+        approved: false,
+        isBye: false
+      });
+    }
+  }
+
+  return matches;
+}
+
+/**
+ * トーナメント形式用：2回戦以降、勝者からマッチを生成
+ * 組番号順に隣り合う試合の勝者同士が対戦する（1回戦で不戦勝を処理済みのため人数は常に偶数）
  * FIX #9: 組番号を1から再採番（新ラウンドでリセット）
  * FIX #5: 不戦勝フラグを使用
  */
@@ -634,7 +765,11 @@ async function nextRound() {
   // ============================================
   if (currentTournament.format === 'tournament') {
     // FIX #9: 勝者のみを抽出
-    const winners = currentMatches.map(m => m.winner).filter(w => w);
+    // トーナメント表の位置を保つため組番号順に並べる（第1試合の勝者 vs 第2試合の勝者 ...）
+    const winners = [...currentMatches]
+      .sort((a, b) => a.number - b.number)
+      .map(m => m.winner)
+      .filter(w => w);
 
     if (winners.length === 1) {
       // 終了条件：勝者が1人
