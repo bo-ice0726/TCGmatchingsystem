@@ -48,26 +48,37 @@ async function apiCall(method, endpoint, data = null) {
   }
 }
 
+// 大会コードの正規化（全角/半角・大文字/小文字の違いを吸収。server.js と同じ処理）
+function normalizeCode(code) {
+  return String(code || '').normalize('NFKC').trim().toUpperCase();
+}
+
+// 大会コードとして使えるか（2〜30文字、空白・制御文字と / \ ? # % < > " ' ` は不可）
+function isValidCode(code) {
+  const length = Array.from(code).length;
+  return length >= 2 && length <= 30 && !/[\s\/\\?#%<>"'`\u0000-\u001f\u007f]/.test(code);
+}
+
 // 大会データ管理（API版）
 class TournamentManager {
-  async createTournament(name, format) {
-    return await apiCall('POST', '/tournaments', { name, format });
+  async createTournament(name, format, code) {
+    return await apiCall('POST', '/tournaments', { name, format, code });
   }
 
   async getTournament(code) {
-    return await apiCall('GET', `/tournaments/${code}`);
+    return await apiCall('GET', `/tournaments/${encodeURIComponent(code)}`);
   }
 
   async joinTournament(code, playerName) {
-    return await apiCall('POST', `/tournaments/${code}/join`, { playerName });
+    return await apiCall('POST', `/tournaments/${encodeURIComponent(code)}/join`, { playerName });
   }
 
   async startTournament(code) {
-    return await apiCall('POST', `/tournaments/${code}/start`);
+    return await apiCall('POST', `/tournaments/${encodeURIComponent(code)}/start`);
   }
 
   async updateTournament(code, updates) {
-    return await apiCall('PUT', `/tournaments/${code}`, updates);
+    return await apiCall('PUT', `/tournaments/${encodeURIComponent(code)}`, updates);
   }
 }
 
@@ -77,28 +88,37 @@ const manager = new TournamentManager();
 async function createTournament() {
   const name = document.getElementById('tournamentName').value.trim();
   const format = document.getElementById('formatSelect').value;
+  const customCode = normalizeCode(document.getElementById('customCode').value);
 
   if (!name || !format) {
     showMessage('createMessage', 'エラー: 大会名と形式を入力してください', 'error');
     return;
   }
 
+  if (customCode && !isValidCode(customCode)) {
+    showMessage('createMessage', 'エラー: 大会コードは2〜30文字で、空白と記号 / \\ ? # % &lt; &gt; " \' ` は使えません', 'error');
+    return;
+  }
+
   try {
-    const result = await manager.createTournament(name, format);
+    const result = await manager.createTournament(name, format, customCode);
     const code = result.code;
-    const message = `
+    const message = document.getElementById('createMessage');
+    message.innerHTML = `
       <p class="success">大会が作成されました！</p>
-      <p>大会コード: <strong>${code}</strong></p>
-      <p><button onclick="goToOrganizer('${code}')" style="width: 100%; padding: 10px; margin-top: 10px;">開催者画面へ</button></p>
+      <p>大会コード: <strong></strong></p>
+      <p><button style="width: 100%; padding: 10px; margin-top: 10px;">開催者画面へ</button></p>
     `;
-    document.getElementById('createMessage').innerHTML = message;
+    // コードは任意の文字列なので HTML に埋め込まず、textContent とイベントで扱う
+    message.querySelector('strong').textContent = code;
+    message.querySelector('button').addEventListener('click', () => goToOrganizer(code));
   } catch (error) {
     showMessage('createMessage', `エラー: ${error.message}`, 'error');
   }
 }
 
 async function participateTournament() {
-  const code = document.getElementById('participateCode').value.trim().toUpperCase();
+  const code = normalizeCode(document.getElementById('participateCode').value);
 
   if (!code) {
     showMessage('participateMessage', 'エラー: 大会コードを入力してください', 'error');
@@ -107,14 +127,14 @@ async function participateTournament() {
 
   try {
     await manager.getTournament(code);
-    window.location.href = `participant.html?code=${code}`;
+    window.location.href = `participant.html?code=${encodeURIComponent(code)}`;
   } catch (error) {
     showMessage('participateMessage', 'エラー: 大会が見つかりません', 'error');
   }
 }
 
 function goToOrganizer(code) {
-  window.location.href = `organizer.html?code=${code}`;
+  window.location.href = `organizer.html?code=${encodeURIComponent(code)}`;
 }
 
 function showMessage(elementId, text, type) {

@@ -16,6 +16,17 @@ app.use(express.json());
 // フロントファイルは public フォルダに配置して配信する
 app.use(express.static('public'));
 
+// 大会コードの正規化（全角/半角・大文字/小文字の違いを吸収。public/app.js と同じ処理）
+function normalizeCode(code) {
+  return String(code || '').normalize('NFKC').trim().toUpperCase();
+}
+
+// 大会コードとして使えるか（2〜30文字、空白・制御文字と / \ ? # % < > " ' ` は不可）
+function isValidCode(code) {
+  const length = Array.from(code).length;
+  return length >= 2 && length <= 30 && !/[\s\/\\?#%<>"'`\u0000-\u001f\u007f]/.test(code);
+}
+
 // データ管理
 class TournamentManager {
   constructor() {
@@ -57,11 +68,16 @@ class TournamentManager {
     return code;
   }
 
-  createTournament(name, format) {
+  createTournament(name, format, customCode = null) {
     let code;
-    do {
-      code = this.generateCode();
-    } while (this.tournaments[code]);
+    if (customCode) {
+      if (this.tournaments[customCode]) return null;
+      code = customCode;
+    } else {
+      do {
+        code = this.generateCode();
+      } while (this.tournaments[code]);
+    }
 
     this.tournaments[code] = {
       id: code,
@@ -172,12 +188,23 @@ app.get('/', (req, res) => {
 // API: 大会作成
 app.post('/api/tournaments', async (req, res) => {
   const { name, format } = req.body;
+  const customCode = normalizeCode(req.body.code);
 
   if (!name || !format) {
     return res.status(400).json({ error: '名前と形式が必要です' });
   }
 
-  const code = manager.createTournament(name, format);
+  if (customCode && !isValidCode(customCode)) {
+    return res.status(400).json({ error: '大会コードは2〜30文字で、空白と記号 / \\ ? # % < > " \' ` は使えません' });
+  }
+
+  // 期限切れの大会が残っているとコードが使えないため、先に削除しておく
+  await manager.cleanupOldTournaments();
+
+  const code = manager.createTournament(name, format, customCode || null);
+  if (!code) {
+    return res.status(409).json({ error: 'この大会コードは既に使われています' });
+  }
   await manager.save();
 
   res.json({ code, tournament: manager.getTournament(code) });
@@ -185,7 +212,7 @@ app.post('/api/tournaments', async (req, res) => {
 
 // API: 大会取得
 app.get('/api/tournaments/:code', (req, res) => {
-  const { code } = req.params;
+  const code = normalizeCode(req.params.code);
   const tournament = manager.getTournament(code);
 
   if (!tournament) {
@@ -197,7 +224,7 @@ app.get('/api/tournaments/:code', (req, res) => {
 
 // API: 大会に参加
 app.post('/api/tournaments/:code/join', async (req, res) => {
-  const { code } = req.params;
+  const code = normalizeCode(req.params.code);
   const { playerName } = req.body;
 
   if (!playerName) {
@@ -221,7 +248,7 @@ app.post('/api/tournaments/:code/join', async (req, res) => {
 
 // API: 大会開始
 app.post('/api/tournaments/:code/start', async (req, res) => {
-  const { code } = req.params;
+  const code = normalizeCode(req.params.code);
   const tournament = manager.getTournament(code);
 
   if (!tournament) {
@@ -240,7 +267,7 @@ app.post('/api/tournaments/:code/start', async (req, res) => {
 
 // API: 大会更新
 app.put('/api/tournaments/:code', async (req, res) => {
-  const { code } = req.params;
+  const code = normalizeCode(req.params.code);
   const updates = req.body;
 
   const tournament = manager.getTournament(code);
