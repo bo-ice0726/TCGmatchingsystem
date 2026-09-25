@@ -185,7 +185,7 @@ function renderMatching() {
   } else if (!myMatch.winner) {
     matchActions.innerHTML = `
       <button onclick="registerWin('${myMatch.id}')" class="btn-action" style="background: green;">勝利を登録</button>
-      <button onclick="registerLoss('${myMatch.id}')" class="btn-action" style="background: #ff6b6b;">敗北を登録</button>
+      <p style="color: #666; font-size: 14px;">勝った方が「勝利を登録」を押してください。負けた方は登録後に結果を承認します。</p>
     `;
   } else if (!myMatch.approved && isLoser) {
     matchActions.innerHTML = `
@@ -199,47 +199,23 @@ function renderMatching() {
  * FIX #3: 二重登録防止
  */
 function registerWin(matchId) {
-  const match = currentTournament.matches.find(m => m.id === matchId);
-  if (!match) return;
-
-  // FIX #3: 既に勝者が決定している場合は再登録不可
-  if (match.winner) {
-    alert('この試合は既に結果が登録されています');
-    return;
-  }
-
-  match.winner = currentPlayer;
-
   (async () => {
     try {
-      await manager.updateTournament(currentTournament.id, { matches: currentTournament.matches });
+      // 開催者が先に結果を登録している場合があるため最新の状態で判定する
       currentTournament = await manager.getTournament(currentTournament.id);
-      renderMatching();
-    } catch (error) {
-      alert('失敗しました: ' + error.message);
-    }
-  })();
-}
+      const match = currentTournament.matches.find(m => m.id === matchId);
+      if (!match) return;
 
-/**
- * 参加者が敗北を登録
- * FIX #3: 二重登録防止
- */
-function registerLoss(matchId) {
-  const match = currentTournament.matches.find(m => m.id === matchId);
-  if (!match) return;
+      // FIX #3: 既に勝者が決定している場合は再登録不可
+      if (match.winner) {
+        alert('この試合は既に結果が登録されています');
+        renderStatus();
+        renderMatching();
+        return;
+      }
 
-  // FIX #3: 既に勝者が決定している場合は再登録不可
-  if (match.winner) {
-    alert('この試合は既に結果が登録されています');
-    return;
-  }
+      match.winner = currentPlayer;
 
-  const opponent = match.player1 === currentPlayer ? match.player2 : match.player1;
-  match.winner = opponent;
-
-  (async () => {
-    try {
       await manager.updateTournament(currentTournament.id, { matches: currentTournament.matches });
       currentTournament = await manager.getTournament(currentTournament.id);
       renderMatching();
@@ -255,37 +231,34 @@ function registerLoss(matchId) {
  * FIX #5: 不戦勝フラグをチェック（isBye）
  */
 function approveResult(matchId) {
-  const match = currentTournament.matches.find(m => m.id === matchId);
-  if (!match) return;
-
-  // 既に승인された不戦勝マッチの場合は処理をスキップ（二重加算防止）
-  if (match.isBye && match.approved) {
-    // 既に승認済みの不戦勝マッチなので、再度処理しない
-    return;
-  }
-
-  // 승认フラグを設定
-  match.approved = true;
-
-  // 勝者の勝利数を増加（通常マッチのみ、不戦勝は生成時に完了）
-  // 不戦勝マッチの場合は既に approved = true で生成されているため、ここでは加算しない
-  if (!match.isBye) {
-    // 通常マッチのみ勝利数を増加
-    if (!currentTournament.winCounts[match.winner]) {
-      currentTournament.winCounts[match.winner] = 0;
-    }
-    currentTournament.winCounts[match.winner]++;
-
-    // FIX #4: 敗業数はapproveResult時のみ加算（1回のみ）
-    const loser = match.player1 === match.winner ? match.player2 : match.player1;
-    if (!currentTournament.lossCounts[loser]) {
-      currentTournament.lossCounts[loser] = 0;
-    }
-    currentTournament.lossCounts[loser]++;
-  }
-
   (async () => {
     try {
+      // 開催者が先に結果を確定・修正している場合があるため最新の状態で判定する
+      currentTournament = await manager.getTournament(currentTournament.id);
+      const match = currentTournament.matches.find(m => m.id === matchId);
+      if (!match) return;
+
+      // 既に承認済み（不戦勝・開催者による確定を含む）の場合は二重加算しない
+      if (match.approved || !match.winner || match.winner === currentPlayer) {
+        renderStatus();
+        renderMatching();
+        return;
+      }
+
+      match.approved = true;
+
+      // FIX #4: 勝敗数はここで1回のみ加算
+      if (!currentTournament.winCounts[match.winner]) {
+        currentTournament.winCounts[match.winner] = 0;
+      }
+      currentTournament.winCounts[match.winner]++;
+
+      const loser = match.player1 === match.winner ? match.player2 : match.player1;
+      if (!currentTournament.lossCounts[loser]) {
+        currentTournament.lossCounts[loser] = 0;
+      }
+      currentTournament.lossCounts[loser]++;
+
       await manager.updateTournament(currentTournament.id, {
         matches: currentTournament.matches,
         winCounts: currentTournament.winCounts,

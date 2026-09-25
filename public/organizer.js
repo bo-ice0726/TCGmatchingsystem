@@ -278,23 +278,16 @@ function renderMatchCards(matches) {
         ` : ''}
         
         <div class="match-actions">
-          ${!match.winner && match.player2 ? `
-            <button class="btn-winner" onclick="recordWinner('${match.id}', '${match.player1}')">
-              ${match.player1} が勝利
+          ${match.player2 && currentTournament.status !== 'finished' ? `
+            <button class="btn-winner" onclick="recordWinner('${match.id}', '${match.player1}')" ${match.approved && match.winner === match.player1 ? 'disabled' : ''}>
+              ${match.player1} が勝利${match.winner ? '（修正）' : ''}
             </button>
-            <button class="btn-winner" onclick="recordWinner('${match.id}', '${match.player2}')">
-              ${match.player2} が勝利
+            <button class="btn-winner" onclick="recordWinner('${match.id}', '${match.player2}')" ${match.approved && match.winner === match.player2 ? 'disabled' : ''}>
+              ${match.player2} が勝利${match.winner ? '（修正）' : ''}
             </button>
           ` : ''}
           ${match.winner && !match.approved ? `
-            <button class="btn-winner" style="background: #6c757d;" disabled>
-              ⏳ 相手の承認待ち
-            </button>
-          ` : ''}
-          ${match.approved ? `
-            <button class="btn-winner" style="background: #17a2b8;" disabled>
-              ✓ 確定済み
-            </button>
+            <div style="width: 100%; text-align: center; color: #6c757d; font-size: 13px;">⏳ 敗者の承認待ち（開催者が登録すると即確定します）</div>
           ` : ''}
         </div>
       </div>
@@ -430,26 +423,40 @@ function renderTournamentBracket() {
 
 /**
  * 勝者を記録する関数（開催者が入力する場合）
- * FIX #3: 勝敗二重登録防止
- * FIX #4: 敗業数はここでは加算しない（approveResult時に加算）
+ * 開催者の登録は参加者の承認なしで即確定する。登録済みの結果の修正にも使う。
  */
 function recordWinner(matchId, winner) {
   const match = currentTournament.matches.find(m => m.id === matchId);
-  if (!match) return;
+  if (!match || match.isBye) return;
 
-  // FIX #3: 既に勝者が決定している場合は再登録不可
-  if (match.winner) {
-    alert('この試合は既に結果が決定しています');
+  if (match.approved && match.winner === winner) return;
+
+  if (match.winner && !confirm(`この試合の結果を「${winner} の勝利」に修正して確定しますか？`)) {
     return;
   }
 
+  const loserOf = w => (match.player1 === w ? match.player2 : match.player1);
+  const addCount = (counts, player, delta) => {
+    counts[player] = Math.max(0, (counts[player] || 0) + delta);
+  };
+
+  // 確定済みの結果を修正する場合は、以前の勝敗数を取り消す
+  if (match.approved && match.winner) {
+    addCount(currentTournament.winCounts, match.winner, -1);
+    addCount(currentTournament.lossCounts, loserOf(match.winner), -1);
+  }
+
   match.winner = winner;
-  // 敗業数の加算は approveResult() で行う
+  match.approved = true;
+  addCount(currentTournament.winCounts, winner, 1);
+  addCount(currentTournament.lossCounts, loserOf(winner), 1);
 
   (async () => {
     try {
-      await manager.updateTournament(currentTournament.id, { 
-        matches: currentTournament.matches
+      await manager.updateTournament(currentTournament.id, {
+        matches: currentTournament.matches,
+        winCounts: currentTournament.winCounts,
+        lossCounts: currentTournament.lossCounts
       });
       currentTournament = await manager.getTournament(currentTournament.id);
       renderMatches();
