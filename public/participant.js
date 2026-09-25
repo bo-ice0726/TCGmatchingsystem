@@ -41,6 +41,22 @@ async function joinTournament() {
   }
 
   try {
+    // 最新の参加者一覧で、既に登録済みの名前か確認する
+    currentTournament = await manager.getTournament(currentTournament.id);
+
+    if (currentTournament.participants[name]) {
+      // ページを閉じてしまった参加者が、同じ名前で再開できるようにする
+      if (!confirm(`「${name}」は既に参加登録されています。\nこの名前で再開しますか？\n（ご自身の名前の場合のみ「OK」を押してください）`)) {
+        return;
+      }
+      currentPlayer = name;
+      showJoinMessage('再開しました！', 'success');
+      setTimeout(() => {
+        showParticipateView();
+      }, 500);
+      return;
+    }
+
     const result = await manager.joinTournament(currentTournament.id, name);
     currentPlayer = name;
     currentTournament = result.tournament;
